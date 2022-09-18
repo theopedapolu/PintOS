@@ -26,7 +26,7 @@ static thread_func start_pthread NO_RETURN;
 static bool load(const char* file_name, void (**eip)(void), void** esp);
 bool setup_thread(void (**eip)(void), void** esp);
 
-/* Initializes user programs in the system by ensuring the main
+/* Initializes user programs in the system by ensuring the main 
    thread has a minimal PCB so that it can execute and wait for
    the first user process. Any additions to the PCB should be also
    initialized here if main needs those members */
@@ -274,7 +274,22 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   struct file* file = NULL;
   off_t file_ofs;
   bool success = false;
-  int i;
+
+  char *token, *save_ptr;
+  char* tokens[MAX_ARGUMENTS];
+  int i = 0;
+
+  /* Loops through each token using the builtin strtok_r function and adds it to the list of tokens. */
+  for (token = strtok_r((char*)file_name, " ", &save_ptr); token != NULL || i >= MAX_ARGUMENTS;
+       token = strtok_r(NULL, " ", &save_ptr)) {
+    size_t len = strlen(token) + 1;
+    tokens[i] = malloc(len + 1);
+    strlcpy(tokens[i], token, MAX_ARGUMENT_SIZE);
+    i++;
+  }
+
+  /* Save the number of tokens for later. */
+  int num_tokens = i;
 
   /* Allocate and activate page directory. */
   t->pcb->pagedir = pagedir_create();
@@ -283,9 +298,9 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   process_activate();
 
   /* Open executable file. */
-  file = filesys_open(file_name);
+  file = filesys_open(tokens[0]);
   if (file == NULL) {
-    printf("load: %s: open failed\n", file_name);
+    printf("load: %s: open failed\n", tokens[0]);
     goto done;
   }
 
@@ -293,7 +308,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr ||
       memcmp(ehdr.e_ident, "\177ELF\1\1\1", 7) || ehdr.e_type != 2 || ehdr.e_machine != 3 ||
       ehdr.e_version != 1 || ehdr.e_phentsize != sizeof(struct Elf32_Phdr) || ehdr.e_phnum > 1024) {
-    printf("load: %s: error loading executable\n", file_name);
+    printf("load: %s: error loading executable\n", tokens[0]);
     goto done;
   }
 
@@ -350,6 +365,87 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   /* Set up stack. */
   if (!setup_stack(esp))
     goto done;
+
+  char* arg_addresses[MAX_ARGUMENTS];
+  // printf("Starting esp: %x\n", *((char**)esp));
+
+  /* Loops through the tokens and adds it to the stack by decrementing
+     the stack pointer by the length of the string (including the null
+     pointer) and running strcpy to that address. */
+  int j;
+  for (j = num_tokens - 1; j >= 0; j--) {
+    size_t len = strlen(tokens[j]);
+    (*((char**)esp)) -= len + 1;
+    strlcpy(*((char**)esp), tokens[j], len + 1);
+
+    // Save the argv addresses for when we're adding them to the stack.
+    arg_addresses[j] = (*((char**)esp));
+    // printf("argv[%d][...]: %x (%s)\n", j, *((char**)esp), *((char**)esp));
+  }
+
+  /* Calculate the number of addresses until we reach the bottom of
+     the stack after argc. This value is the num_tokens + 1 (includes
+     null-valued argv[argc]) + 1 (for the address of argv[0]) + 1 (for
+     argc). */
+  int rest_of_data = (num_tokens + 3) * 4;
+
+  /* This is the address at which will be the bottom of the stack
+     (current - rest_of_data). We make it unsigned so rounding down
+     works correctly in the next line. */
+  unsigned int target = (unsigned int)((*((char**)esp) - rest_of_data));
+
+  /* We get the size of the stack alignment by getting the difference
+     between the target and 16-byte offset, calculated by rounding down
+     to be divisible by 16. */
+  int stack_align_value = (int)(target - (target / 16 * 16));
+
+  /* Decrement the stack pointer by however many bytes we need to align
+     the esp. We also fill these values with 0. */
+  *((char**)esp) -= stack_align_value;
+  memset(*((char**)esp), 0, stack_align_value);
+
+  // printf("%d %d %d\n", *((char**)esp), rest_of_data, stack_align_value);
+  /*
+  if (stack_align_value != 0) {
+    printf("stack-align: %x (%x)\n", *((char**)esp), **((char**)esp));
+  } else {
+    printf("stack-align: [none]\n");
+  }
+  */
+
+  /* Per the C Standard, argv[argc] is to be null in order to cause
+     out-of-bounds argv reading to immediately cause a
+     null-pointer-deference and a segfault. */
+  *((char**)esp) -= 4;
+  **((char***)esp) = 0;
+  // printf("argv[%d]: %x (%x)\n", num_tokens, *((char**)esp), **((char***)esp));
+
+  /* Fill the addresses for each argument in here (using arg_addresses
+     from earlier). */
+  for (j = num_tokens - 1; j >= 0; j--) {
+    *((char**)esp) -= 4;
+    **((char***)esp) = arg_addresses[j];
+    // printf("argv[%d]: %x (%x)\n", j, *((char**)esp), **((char***)esp));
+  }
+
+  /* Now we're adding the arguments to main() to the stack. Here,
+     we're adding the address to argv, which is right above this
+     address in the stack. */
+  *((char**)esp) -= 4;
+  **((char****)esp) = *((char***)esp) + 1;
+  // printf("argv: %x (%x)\n", *((char**)esp),  **((char****)esp));
+
+  /* Add argc to the stack. */
+  *((char**)esp) -= 4;
+  **((int**)esp) = num_tokens;
+  // printf("argc: %x (%d)\n", *((char**)esp), num_tokens);
+
+  /* Add the return address to the stack. This isn't a real return
+     address as the entry function doesn't ever return, but it is to be
+     consistent across functions. */
+  *((char**)esp) -= 4;
+  **((void***)esp) = NULL;
+  // printf("return address: %x (%x)\n", *((char**)esp), **((void***)esp));
 
   /* Start address. */
   *eip = (void (*)(void))ehdr.e_entry;
