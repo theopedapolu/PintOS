@@ -288,6 +288,8 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
     i++;
   }
 
+  strlcpy(t->pcb->process_name, tokens[0], strlen(tokens[0]) + 1);
+
   /* Save the number of tokens for later. */
   int num_tokens = i;
 
