@@ -88,7 +88,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
   } else if(args[0] == SYS_REMOVE) {
     f->eax = filesys_remove((const char*)args[1]);
   } else if(args[0] == SYS_OPEN) {
-    f->eax = (uint32_t)file_open((struct inode*)args[1]); // This is wrong
+    f->eax = (uint32_t)filesys_open(args[1]); // This is wrong
   } else if(args[0] == SYS_FILESIZE) {
     f->eax = file_length((struct file*)args[1]); // This is wrong
   } else if(args[0] == SYS_READ) {
