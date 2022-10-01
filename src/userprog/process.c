@@ -291,6 +291,11 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   /* Save the number of tokens for later. */
   int num_tokens = i;
 
+  /* Addresses used for copying argv onto the stack. 
+     This isn't used till later, but since num_tokens is variable it cannot
+     come after goto since this is not allowed by C. */
+  char* arg_addresses[num_tokens];
+
   /* Allocate and activate page directory. */
   t->pcb->pagedir = pagedir_create();
   if (t->pcb->pagedir == NULL)
@@ -365,8 +370,6 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   /* Set up stack. */
   if (!setup_stack(esp))
     goto done;
-
-  char* arg_addresses[num_tokens];
 
   /* Loops through the tokens and adds it to the stack by decrementing
      the stack pointer by the length of the string (including the null
