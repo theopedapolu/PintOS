@@ -266,6 +266,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
   if(!are_valid_args(args, 1) || args[0] >= 32 || !are_valid_args(args + 1, map[args[0]].num_args)) {
     // Kill process
+    
   }
 
   map[args[0]].handler(&(f->eax), args + 1);
