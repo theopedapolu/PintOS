@@ -10,10 +10,21 @@
 
 /* TODO: Functions that check the if the arguments are in
    valid user memory. */
-static bool is_valid_uaddr(const void* vaddr);
-static bool is_valid_user_memory(const void* vaddr, size_t size);
-static bool are_valid_args(const int32_t* args, size_t num_args);
-static bool is_valid_string(const char* str);
+static bool is_valid_uaddr(const void* vaddr) {
+  return true;
+}
+
+static bool is_valid_user_memory(const void* vaddr, size_t size) {
+  return true;
+}
+
+static bool are_valid_args(const int32_t* args, size_t num_args) {
+  return true;
+}
+
+static bool is_valid_string(const char* str) {
+  return true;
+}
 
 /* Type declaration for a syscall handler. eax is a pointer 
    to the process' eax register that should be treated as the
@@ -21,7 +32,7 @@ static bool is_valid_string(const char* str);
    of arguments for a given syscall as defined in lib/user/syscall.c.
    For example, for the read syscall, args[0] = fd, args[1] = buffer,
    args[2] = size. */
-typedef uint32_t* syscall_handler_func(uint32_t* eax, char** args);
+typedef void syscall_handler_func(uint32_t* eax, uint32_t* args);
 
 /* Type declaration for grouping a syscall handler with the
    number of args it has. This is stored in an array below
@@ -41,38 +52,38 @@ void syscall_init(void) { intr_register_int(0x30, 3, INTR_ON, syscall_handler, "
    handlers that will need to be implemented below.
    NOTE: If args includes a pointer to something, the pointer
    must be checked for valid memory in the specific function. */
-void syscall_halt_handler(uint32_t* eax, char** args);
-void syscall_exit_handler(uint32_t* eax, char** args);
-void syscall_exec_handler(uint32_t* eax, char** args);
-void syscall_wait_handler(uint32_t* eax, char** args);
-void syscall_create_handler(uint32_t* eax, char** args);
-void syscall_remove_handler(uint32_t* eax, char** args);
-void syscall_open_handler(uint32_t* eax, char** args);
-void syscall_filesize_handler(uint32_t* eax, char** args);
-void syscall_read_handler(uint32_t* eax, char** args);
-void syscall_write_handler(uint32_t* eax, char** args);
-void syscall_seek_handler(uint32_t* eax, char** args);
-void syscall_tell_handler(uint32_t* eax, char** args);
-void syscall_close_handler(uint32_t* eax, char** args);
-void syscall_practice_handler(uint32_t* eax, char** args);
-void syscall_compute_e_handler(uint32_t* eax, char** args);
-void syscall_pt_create_handler(uint32_t* eax, char** args);
-void syscall_pt_exit_handler(uint32_t* eax, char** args);
-void syscall_pt_join_handler(uint32_t* eax, char** args);
-void syscall_lock_init_handler(uint32_t* eax, char** args);
-void syscall_lock_acquire_handler(uint32_t* eax, char** args);
-void syscall_lock_release_handler(uint32_t* eax, char** args);
-void syscall_sema_init_handler(uint32_t* eax, char** args);
-void syscall_sema_down_handler(uint32_t* eax, char** args);
-void syscall_sema_up_handler(uint32_t* eax, char** args);
-void syscall_get_tid_handler(uint32_t* eax, char** args);
-void syscall_nmap_handler(uint32_t* eax, char** args);
-void syscall_munmap_handler(uint32_t* eax, char** args);
-void syscall_chdir_handler(uint32_t* eax, char** args);
-void syscall_mkdir_handler(uint32_t* eax, char** args);
-void syscall_readdir_handler(uint32_t* eax, char** args);
-void syscall_isdir_handler(uint32_t* eax, char** args);
-void syscall_inumber_handler(uint32_t* eax, char** args);
+void syscall_halt_handler(uint32_t* eax, uint32_t* args);
+void syscall_exit_handler(uint32_t* eax, uint32_t* args);
+void syscall_exec_handler(uint32_t* eax, uint32_t* args);
+void syscall_wait_handler(uint32_t* eax, uint32_t* args);
+void syscall_create_handler(uint32_t* eax, uint32_t* args);
+void syscall_remove_handler(uint32_t* eax, uint32_t* args);
+void syscall_open_handler(uint32_t* eax, uint32_t* args);
+void syscall_filesize_handler(uint32_t* eax, uint32_t* args);
+void syscall_read_handler(uint32_t* eax, uint32_t* args);
+void syscall_write_handler(uint32_t* eax, uint32_t* args);
+void syscall_seek_handler(uint32_t* eax, uint32_t* args);
+void syscall_tell_handler(uint32_t* eax, uint32_t* args);
+void syscall_close_handler(uint32_t* eax, uint32_t* args);
+void syscall_practice_handler(uint32_t* eax, uint32_t* args);
+void syscall_compute_e_handler(uint32_t* eax, uint32_t* args);
+void syscall_pt_create_handler(uint32_t* eax, uint32_t* args);
+void syscall_pt_exit_handler(uint32_t* eax, uint32_t* args);
+void syscall_pt_join_handler(uint32_t* eax, uint32_t* args);
+void syscall_lock_init_handler(uint32_t* eax, uint32_t* args);
+void syscall_lock_acquire_handler(uint32_t* eax, uint32_t* args);
+void syscall_lock_release_handler(uint32_t* eax, uint32_t* args);
+void syscall_sema_init_handler(uint32_t* eax, uint32_t* args);
+void syscall_sema_down_handler(uint32_t* eax, uint32_t* args);
+void syscall_sema_up_handler(uint32_t* eax, uint32_t* args);
+void syscall_get_tid_handler(uint32_t* eax, uint32_t* args);
+void syscall_nmap_handler(uint32_t* eax, uint32_t* args);
+void syscall_munmap_handler(uint32_t* eax, uint32_t* args);
+void syscall_chdir_handler(uint32_t* eax, uint32_t* args);
+void syscall_mkdir_handler(uint32_t* eax, uint32_t* args);
+void syscall_readdir_handler(uint32_t* eax, uint32_t* args);
+void syscall_isdir_handler(uint32_t* eax, uint32_t* args);
+void syscall_inumber_handler(uint32_t* eax, uint32_t* args);
 
 /* Array mapping each syscall (noted by its index) to
    the number of arguments it has and the function handler 
@@ -112,19 +123,139 @@ struct syscall_mapping map[] = {
   {1, syscall_inumber_handler},
 };
 
-void syscall_exit_handler(uint32_t* eax, char** args) {
+void syscall_halt_handler(uint32_t* eax, uint32_t* args) {
+
+}
+
+void syscall_exit_handler(uint32_t* eax, uint32_t* args) {
   *eax = args[1];
   printf("%s: exit(%d)\n", thread_current()->pcb->process_name, args[1]);
   process_exit();
 }
 
-void syscall_write_handler(uint32_t* eax, char** args) {
+void syscall_exec_handler(uint32_t* eax, uint32_t* args) {
+
+}
+
+void syscall_wait_handler(uint32_t* eax, uint32_t* args) {
+
+}
+
+void syscall_create_handler(uint32_t* eax, uint32_t* args) {
+
+}
+
+void syscall_remove_handler(uint32_t* eax, uint32_t* args) {
+
+}
+
+void syscall_open_handler(uint32_t* eax, uint32_t* args) {
+
+}
+
+void syscall_filesize_handler(uint32_t* eax, uint32_t* args) {
+
+}
+
+void syscall_read_handler(uint32_t* eax, uint32_t* args) {
+
+}
+
+void syscall_write_handler(uint32_t* eax, uint32_t* args) {
   if (args[0] == STDOUT_FILENO) {
     putbuf((const void*)args[1], (size_t)args[2]);
     *eax = args[2];
   } 
 
   // TODO: Implement file writes other than stdout
+}
+
+void syscall_seek_handler(uint32_t* eax, uint32_t* args) {
+
+}
+
+void syscall_tell_handler(uint32_t* eax, uint32_t* args) {
+
+}
+
+void syscall_close_handler(uint32_t* eax, uint32_t* args) {
+
+}
+
+void syscall_practice_handler(uint32_t* eax, uint32_t* args) {
+
+}
+
+void syscall_compute_e_handler(uint32_t* eax, uint32_t* args) {
+
+}
+
+void syscall_pt_create_handler(uint32_t* eax, uint32_t* args) {
+
+}
+
+void syscall_pt_exit_handler(uint32_t* eax, uint32_t* args) {
+
+}
+
+void syscall_pt_join_handler(uint32_t* eax, uint32_t* args) {
+
+}
+
+void syscall_lock_init_handler(uint32_t* eax, uint32_t* args) {
+
+}
+
+void syscall_lock_acquire_handler(uint32_t* eax, uint32_t* args) {
+
+}
+
+void syscall_lock_release_handler(uint32_t* eax, uint32_t* args) {
+
+}
+
+void syscall_sema_init_handler(uint32_t* eax, uint32_t* args) {
+
+}
+
+void syscall_sema_down_handler(uint32_t* eax, uint32_t* args) {
+
+}
+
+void syscall_sema_up_handler(uint32_t* eax, uint32_t* args) {
+
+}
+
+void syscall_get_tid_handler(uint32_t* eax, uint32_t* args) {
+
+}
+
+void syscall_nmap_handler(uint32_t* eax, uint32_t* args) {
+
+}
+
+void syscall_munmap_handler(uint32_t* eax, uint32_t* args) {
+
+}
+
+void syscall_chdir_handler(uint32_t* eax, uint32_t* args) {
+
+}
+
+void syscall_mkdir_handler(uint32_t* eax, uint32_t* args) {
+
+}
+
+void syscall_readdir_handler(uint32_t* eax, uint32_t* args) {
+
+}
+
+void syscall_isdir_handler(uint32_t* eax, uint32_t* args) {
+
+}
+
+void syscall_inumber_handler(uint32_t* eax, uint32_t* args) {
+
 }
 
 /* Handles syscalls right after they're called. First checks
