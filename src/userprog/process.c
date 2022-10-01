@@ -366,7 +366,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   if (!setup_stack(esp))
     goto done;
 
-  char* arg_addresses[MAX_ARGUMENTS];
+  char* arg_addresses[num_tokens];
 
   /* Loops through the tokens and adds it to the stack by decrementing
      the stack pointer by the length of the string (including the null
