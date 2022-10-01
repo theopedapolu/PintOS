@@ -8,22 +8,39 @@
 #include "threads/thread.h"
 #include "userprog/process.h"
 
+/* TODO: Functions that check the if the arguments are in
+   valid user memory. */
 static bool is_valid_uaddr(const void* vaddr);
 static bool is_valid_user_memory(const void* vaddr, size_t size);
 static bool are_valid_args(const int32_t* args, size_t num_args);
 static bool is_valid_string(const char* str);
 
+/* Type declaration for a syscall handler. eax is a pointer 
+   to the process' eax register that should be treated as the
+   return value for a function. args corresponds to an array 
+   of arguments for a given syscall as defined in lib/user/syscall.c.
+   For example, for the read syscall, args[0] = fd, args[1] = buffer,
+   args[2] = size. */
 typedef uint32_t* syscall_handler_func(uint32_t* eax, char** args);
 
+/* Type declaration for grouping a syscall handler with the
+   number of args it has. This is stored in an array below
+   where the index of the array is the respective syscall. */
 struct syscall_mapping {
   int num_args;
   syscall_handler_func* handler;
 };
 
+/* Function declaration for the generic syscall handler.
+   This is the first function called on a syscall. */
 static void syscall_handler(struct intr_frame*);
 
 void syscall_init(void) { intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall"); }
 
+/* These are all the declarations for the specific syscall
+   handlers that will need to be implemented below.
+   NOTE: If args includes a pointer to something, the pointer
+   must be checked for valid memory in the specific function. */
 void syscall_halt_handler(uint32_t* eax, char** args);
 void syscall_exit_handler(uint32_t* eax, char** args);
 void syscall_exec_handler(uint32_t* eax, char** args);
@@ -57,6 +74,9 @@ void syscall_readdir_handler(uint32_t* eax, char** args);
 void syscall_isdir_handler(uint32_t* eax, char** args);
 void syscall_inumber_handler(uint32_t* eax, char** args);
 
+/* Array mapping each syscall (noted by its index) to
+   the number of arguments it has and the function handler 
+   assigned to deal with it. */
 struct syscall_mapping map[] = {
   {0, syscall_halt_handler},
   {0, syscall_exit_handler},
@@ -93,7 +113,7 @@ struct syscall_mapping map[] = {
 };
 
 void syscall_exit_handler(uint32_t* eax, char** args) {
-  eax = args[1];
+  *eax = args[1];
   printf("%s: exit(%d)\n", thread_current()->pcb->process_name, args[1]);
   process_exit();
 }
@@ -101,14 +121,19 @@ void syscall_exit_handler(uint32_t* eax, char** args) {
 void syscall_write_handler(uint32_t* eax, char** args) {
   if (args[0] == STDOUT_FILENO) {
     putbuf((const void*)args[1], (size_t)args[2]);
-    eax = args[2];
+    *eax = args[2];
   } 
+
+  // TODO: Implement file writes other than stdout
 }
 
+/* Handles syscalls right after they're called. First checks
+   If the syscall identifier is valid memory, then checks if
+   it is a valid syscall, then if the arguments are valid. */
 static void syscall_handler(struct intr_frame* f UNUSED) {
   uint32_t* args = ((uint32_t*)f->esp);
 
-  if(!are_valid_args(args, 1) || !are_valid_args(args + 1, map[args[0]].num_args)) {
+  if(!are_valid_args(args, 1) || args[0] >= 32 || !are_valid_args(args + 1, map[args[0]].num_args)) {
     // Kill process
   }
 
