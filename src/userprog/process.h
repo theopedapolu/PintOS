@@ -9,6 +9,10 @@
 #define MAX_STACK_PAGES (1 << 11)
 #define MAX_THREADS 127
 
+// Command line argument limits
+#define MAX_ARGUMENTS 32
+#define MAX_ARGUMENT_SIZE 64
+
 /* PIDs and TIDs are the same type. PID should be
    the TID of the main thread of the process */
 typedef tid_t pid_t;
