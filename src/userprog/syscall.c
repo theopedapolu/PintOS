@@ -98,6 +98,13 @@ void syscall_exit_handler(uint32_t* eax, char** args) {
   process_exit();
 }
 
+void syscall_write_handler(uint32_t* eax, char** args) {
+  if (args[0] == STDOUT_FILENO) {
+    putbuf((const void*)args[1], (size_t)args[2]);
+    eax = args[2];
+  } 
+}
+
 static void syscall_handler(struct intr_frame* f UNUSED) {
   uint32_t* args = ((uint32_t*)f->esp);
 
