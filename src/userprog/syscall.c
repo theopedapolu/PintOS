@@ -74,38 +74,39 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     f->eax = args[1];
     printf("%s: exit(%d)\n", thread_current()->pcb->process_name, args[1]);
     process_exit();
-  } else if(args[0] == SYS_EXEC) {
+  } else if (args[0] == SYS_EXEC) {
     pid_t pid = process_execute((const char*)args[1]);
-    if(pid != TID_ERROR) {
+    if (pid != TID_ERROR) {
       f->eax = pid;
     } else {
       f->eax = -1;
     }
-  } else if(args[0] == SYS_WAIT) {
+  } else if (args[0] == SYS_WAIT) {
     f->eax = process_wait((pid_t)args[1]);
-  } else if(args[0] == SYS_CREATE) {
+  } else if (args[0] == SYS_CREATE) {
     f->eax = filesys_create((const char*)args[1], (off_t)args[2]);
-  } else if(args[0] == SYS_REMOVE) {
+  } else if (args[0] == SYS_REMOVE) {
     f->eax = filesys_remove((const char*)args[1]);
-  } else if(args[0] == SYS_OPEN) {
+  } else if (args[0] == SYS_OPEN) {
     f->eax = (uint32_t)filesys_open(args[1]); // This is wrong
-  } else if(args[0] == SYS_FILESIZE) {
+  } else if (args[0] == SYS_FILESIZE) {
     f->eax = file_length((struct file*)args[1]); // This is wrong
-  } else if(args[0] == SYS_READ) {
+  } else if (args[0] == SYS_READ) {
     f->eax = file_read((struct file*)args[1], (void*)args[2], (off_t)args[3]); // This is wrong
-  } else if(args[0] == SYS_WRITE) {
-    if(args[1] == STDOUT_FILENO) {
+  } else if (args[0] == SYS_WRITE) {
+    if (args[1] == STDOUT_FILENO) {
       putbuf((const void*)args[2], (size_t)args[3]);
       f->eax = args[3];
     } else
-      f->eax = file_write((struct file*)args[1], (const void*)args[2], (off_t)args[3]); // This is wrong
-  } else if(args[0] == SYS_SEEK) {
+      f->eax =
+          file_write((struct file*)args[1], (const void*)args[2], (off_t)args[3]); // This is wrong
+  } else if (args[0] == SYS_SEEK) {
     file_seek((struct file*)args[1], (off_t)args[2]); // This is wrong
-  } else if(args[0] == SYS_TELL) {
+  } else if (args[0] == SYS_TELL) {
     f->eax = file_tell((struct file*)args[1]); // This is wrong
-  } else if(args[0] == SYS_CLOSE) {
+  } else if (args[0] == SYS_CLOSE) {
     file_close((struct file*)args[1]); // This is wrong
-  } else if(args[0] == SYS_PRACTICE) {
+  } else if (args[0] == SYS_PRACTICE) {
     f->eax = args[1] + 1;
   }
 }
