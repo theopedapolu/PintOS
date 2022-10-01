@@ -129,7 +129,7 @@ void syscall_halt_handler(uint32_t* eax, uint32_t* args) {
 
 void syscall_exit_handler(uint32_t* eax, uint32_t* args) {
   *eax = args[1];
-  printf("%s: exit(%d)\n", thread_current()->pcb->process_name, args[1]);
+  printf("%s: exit(%d)\n", thread_current()->pcb->process_name, args[0]);
   process_exit();
 }
 
