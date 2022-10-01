@@ -76,6 +76,7 @@ static void start_process(void* file_name_) {
   struct thread* t = thread_current();
   struct intr_frame if_;
   bool success, pcb_success;
+  char temp[108]; // For storing current FPU state during initialization
 
   /* Allocate process control block */
   struct process* new_pcb = malloc(sizeof(struct process));
@@ -101,6 +102,9 @@ static void start_process(void* file_name_) {
     if_.eflags = FLAG_IF | FLAG_MBS;
     success = load(file_name, &if_.eip, &if_.esp);
   }
+
+  /* Temporarily save fpu state in temp, initialize sf->fpu_state for new thread, restore current thread's fpu state*/
+  asm_volatile("fsave 0(%0); fsave 0(%1); frstor 0(%0)" : : "g"(temp), "g"(if_->fpu_state) : "memory");
 
   /* Handle failure with succesful PCB malloc. Must free the PCB */
   if (!success && pcb_success) {
