@@ -17,12 +17,13 @@
 */
 .func intr_entry
 intr_entry:
-	/* Save caller's registers. */
+	/* Save caller's registers and FPU state */
 	pushl %ds
 	pushl %es
 	pushl %fs
 	pushl %gs
 	pushal
+   fsave 0(%esp)
 
 	/* Set up kernel environment. */
 	cld			/* String instructions go upward. */
@@ -49,7 +50,8 @@ intr_entry:
 .globl intr_exit
 .func intr_exit
 intr_exit:
-	/* Restore caller's registers. */
+	/* Restore caller's registers and FPU state */
+   frstor 0(%esp)
 	popal
 	popl %gs
 	popl %fs

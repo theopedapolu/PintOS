@@ -15,7 +15,7 @@
 .globl switch_threads
 .func switch_threads
 switch_threads:
-	# Save caller's register state.
+	# Save caller's register state and FPU state
 	#
 	# Note that the SVR4 ABI allows us to destroy %eax, %ecx, %edx,
 	# but requires us to preserve %ebx, %ebp, %esi, %edi.  See
@@ -27,6 +27,7 @@ switch_threads:
 	pushl %ebp
 	pushl %esi
 	pushl %edi
+	fsave 0(%esp)
 
 	# Get offsetof (struct thread, stack).
 .globl thread_stack_ofs
@@ -40,7 +41,8 @@ switch_threads:
 	movl SWITCH_NEXT(%esp), %ecx
 	movl (%ecx,%edx,1), %esp
 
-	# Restore caller's register state.
+	# Restore caller's register state and FPU state
+	frstor 0(%esp)
 	popl %edi
 	popl %esi
 	popl %ebp

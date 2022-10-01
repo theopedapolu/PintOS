@@ -351,6 +351,8 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   if (!setup_stack(esp))
     goto done;
 
+  char **c = (char **) esp;
+  printf("%s", "Hello");
   /* Start address. */
   *eip = (void (*)(void))ehdr.e_entry;
 

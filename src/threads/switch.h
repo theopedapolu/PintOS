@@ -4,6 +4,7 @@
 #ifndef __ASSEMBLER__
 /* switch_thread()'s stack frame. */
 struct switch_threads_frame {
+  char fpu_state[108]
   uint32_t edi;        /*  0: Saved %edi. */
   uint32_t esi;        /*  4: Saved %esi. */
   uint32_t ebp;        /*  8: Saved %ebp. */
