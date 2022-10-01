@@ -293,6 +293,11 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   /* Save the number of tokens for later. */
   int num_tokens = i;
 
+  /* Addresses used for copying argv onto the stack. 
+     This isn't used till later, but since num_tokens is variable it cannot
+     come after goto since this is not allowed by C. */
+  char* arg_addresses[num_tokens];
+
   /* Allocate and activate page directory. */
   t->pcb->pagedir = pagedir_create();
   if (t->pcb->pagedir == NULL)
@@ -368,9 +373,6 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   if (!setup_stack(esp))
     goto done;
 
-  char* arg_addresses[MAX_ARGUMENTS];
-  // printf("Starting esp: %x\n", *((char**)esp));
-
   /* Loops through the tokens and adds it to the stack by decrementing
      the stack pointer by the length of the string (including the null
      pointer) and running strcpy to that address. */
@@ -382,7 +384,6 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
 
     // Save the argv addresses for when we're adding them to the stack.
     arg_addresses[j] = (*((char**)esp));
-    // printf("argv[%d][...]: %x (%s)\n", j, *((char**)esp), *((char**)esp));
   }
 
   /* Calculate the number of addresses until we reach the bottom of
@@ -406,28 +407,17 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   *((char**)esp) -= stack_align_value;
   memset(*((char**)esp), 0, stack_align_value);
 
-  // printf("%d %d %d\n", *((char**)esp), rest_of_data, stack_align_value);
-  /*
-  if (stack_align_value != 0) {
-    printf("stack-align: %x (%x)\n", *((char**)esp), **((char**)esp));
-  } else {
-    printf("stack-align: [none]\n");
-  }
-  */
-
   /* Per the C Standard, argv[argc] is to be null in order to cause
      out-of-bounds argv reading to immediately cause a
      null-pointer-deference and a segfault. */
   *((char**)esp) -= 4;
   **((char***)esp) = 0;
-  // printf("argv[%d]: %x (%x)\n", num_tokens, *((char**)esp), **((char***)esp));
 
   /* Fill the addresses for each argument in here (using arg_addresses
      from earlier). */
   for (j = num_tokens - 1; j >= 0; j--) {
     *((char**)esp) -= 4;
     **((char***)esp) = arg_addresses[j];
-    // printf("argv[%d]: %x (%x)\n", j, *((char**)esp), **((char***)esp));
   }
 
   /* Now we're adding the arguments to main() to the stack. Here,
@@ -435,19 +425,16 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
      address in the stack. */
   *((char**)esp) -= 4;
   **((char****)esp) = *((char***)esp) + 1;
-  // printf("argv: %x (%x)\n", *((char**)esp),  **((char****)esp));
 
   /* Add argc to the stack. */
   *((char**)esp) -= 4;
   **((int**)esp) = num_tokens;
-  // printf("argc: %x (%d)\n", *((char**)esp), num_tokens);
 
   /* Add the return address to the stack. This isn't a real return
      address as the entry function doesn't ever return, but it is to be
      consistent across functions. */
   *((char**)esp) -= 4;
   **((void***)esp) = NULL;
-  // printf("return address: %x (%x)\n", *((char**)esp), **((void***)esp));
 
   /* Start address. */
   *eip = (void (*)(void))ehdr.e_entry;
