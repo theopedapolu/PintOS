@@ -101,7 +101,7 @@ void syscall_exit_handler(uint32_t* eax, char** args) {
 static void syscall_handler(struct intr_frame* f UNUSED) {
   uint32_t* args = ((uint32_t*)f->esp);
 
-  if(!are_valid_args(args, 1) || !are_valid_args(args, map[args[0]].num_args) {
+  if(!are_valid_args(args, 1) || !are_valid_args(args, map[args[0]].num_args)) {
     // Kill process
   }
 
