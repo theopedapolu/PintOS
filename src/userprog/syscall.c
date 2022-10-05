@@ -147,9 +147,30 @@ void syscall_exit_handler(uint32_t* eax, uint32_t* args) {
   process_exit(args[0]);
 }
 
-void syscall_exec_handler(uint32_t* eax, uint32_t* args) {}
+void syscall_exec_handler(uint32_t* eax, uint32_t* args) {
+  char* cmd = args[0];
 
-void syscall_wait_handler(uint32_t* eax, uint32_t* args) {}
+  /* If cmd is not in user memory, kill the process */
+  if (!is_valid_string(cmd)) {
+    process_exit(-1);
+  }
+
+  /* Copy cmd to kernel stack */
+  size_t cmd_len = strlen(cmd);
+  char cmd_copy[cmd_len + 1];
+  memcpy(cmd_copy, cmd, cmd_len + 1);
+
+  pid_t pid = process_execute(cmd_copy);
+  if (pid == TID_ERROR) {
+    *eax = -1;
+  } else {
+    *eax = pid;
+  }
+}
+
+void syscall_wait_handler(uint32_t* eax, uint32_t* args) {
+  *eax = process_wait(args[0]);
+}
 
 void syscall_create_handler(uint32_t* eax, uint32_t* args) {}
 
