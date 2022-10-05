@@ -113,12 +113,8 @@ static void start_process(void* file_name_) {
     struct process* pcb_to_free = t->pcb;
     t->pcb = NULL;
 
-    struct list_elem* e;
-
-    for (e = list_begin(&(pcb_to_free->user_files)); e != list_end(&(pcb_to_free->user_files));
-         e = list_next(e)) {
-      struct foo* f = list_entry(e, struct user_file, elem);
-    }
+    // Destroy the user file list and close all associated files
+    user_file_list_destroy(&pcb_to_free->user_files);
 
     free(pcb_to_free);
   }
@@ -190,6 +186,10 @@ void process_exit(int status) {
      can try to activate the pagedir, but it is now freed memory */
   struct process* pcb_to_free = cur->pcb;
   cur->pcb = NULL;
+
+  // Destroy the user file list and close all associated files
+  user_file_list_destroy(&pcb_to_free->user_files);
+
   free(pcb_to_free);
 
   sema_up(&temporary);
