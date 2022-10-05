@@ -155,7 +155,7 @@ int process_wait(pid_t child_pid UNUSED) {
 }
 
 /* Free the current process's resources. */
-void process_exit(void) {
+void process_exit(int status) {
   struct thread* cur = thread_current();
   uint32_t* pd;
 
@@ -164,6 +164,9 @@ void process_exit(void) {
     thread_exit();
     NOT_REACHED();
   }
+
+  /* Print exit status */
+  printf("%s: exit(%d)\n", cur->pcb->process_name, status);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
