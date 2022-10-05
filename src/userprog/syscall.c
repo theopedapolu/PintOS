@@ -9,6 +9,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "userprog/pagedir.h"
 #include "userprog/process.h"
 
 /* Returns true if VADDR is in valid user memory. */
@@ -21,7 +22,7 @@ static bool is_valid_uaddr(const void* vaddr) {
    in valid user memory. */
 static bool is_valid_user_memory(const void* vaddr, size_t size) {
   uint8_t* addr = (uint8_t*)vaddr;
-  for (int offset = 0; offset < size; offset++) {
+  for (size_t offset = 0; offset < size; offset++) {
     if (!is_valid_uaddr(addr + offset)) {
       return false;
     }
@@ -30,13 +31,13 @@ static bool is_valid_user_memory(const void* vaddr, size_t size) {
 }
 
 /* Returns true if ARGS is in valid user memory. */
-static bool are_valid_args(const int32_t* args, size_t num_args) {
+static bool are_valid_args(const uint32_t* args, size_t num_args) {
   return is_valid_user_memory(args, num_args * sizeof(uint32_t));
 }
 
 /* Returns true if the string STR is in valid user memory. */
 static bool is_valid_string(const char* str) {
-  while (is_valid_uaddr(str) && *str != NULL) {
+  while (is_valid_uaddr(str) && *str != 0) {
     str += 1;
   }
   return is_valid_uaddr(str);
@@ -139,16 +140,16 @@ struct syscall_info syscall_table[] = {
   {1, syscall_inumber_handler},
 };
 
-void syscall_halt_handler(uint32_t* eax, uint32_t* args) {
+void syscall_halt_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {
   shutdown_power_off();
 }
 
-void syscall_exit_handler(uint32_t* eax, uint32_t* args) {
+void syscall_exit_handler(uint32_t* eax UNUSED, uint32_t* args) {
   process_exit(args[0]);
 }
 
 void syscall_exec_handler(uint32_t* eax, uint32_t* args) {
-  char* cmd = args[0];
+  char* cmd = (char*)args[0];
 
   /* If cmd is not in user memory, kill the process */
   if (!is_valid_string(cmd)) {
@@ -157,10 +158,10 @@ void syscall_exec_handler(uint32_t* eax, uint32_t* args) {
 
   /* Copy cmd to kernel stack */
   size_t cmd_len = strlen(cmd);
-  char cmd_copy[cmd_len + 1];
-  memcpy(cmd_copy, cmd, cmd_len + 1);
+  char cmd_cpy[cmd_len + 1];
+  strlcpy(cmd_cpy, cmd, cmd_len + 1);
 
-  pid_t pid = process_execute(cmd_copy);
+  pid_t pid = process_execute(cmd_cpy);
   if (pid == TID_ERROR) {
     *eax = -1;
   } else {
@@ -172,15 +173,15 @@ void syscall_wait_handler(uint32_t* eax, uint32_t* args) {
   *eax = process_wait(args[0]);
 }
 
-void syscall_create_handler(uint32_t* eax, uint32_t* args) {}
+void syscall_create_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_remove_handler(uint32_t* eax, uint32_t* args) {}
+void syscall_remove_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_open_handler(uint32_t* eax, uint32_t* args) {}
+void syscall_open_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_filesize_handler(uint32_t* eax, uint32_t* args) {}
+void syscall_filesize_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_read_handler(uint32_t* eax, uint32_t* args) {}
+void syscall_read_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
 void syscall_write_handler(uint32_t* eax, uint32_t* args) {
   if (args[0] == STDOUT_FILENO) {
@@ -191,57 +192,57 @@ void syscall_write_handler(uint32_t* eax, uint32_t* args) {
   // TODO: Implement file writes other than stdout
 }
 
-void syscall_seek_handler(uint32_t* eax, uint32_t* args) {}
+void syscall_seek_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_tell_handler(uint32_t* eax, uint32_t* args) {}
+void syscall_tell_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_close_handler(uint32_t* eax, uint32_t* args) {}
+void syscall_close_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
 void syscall_practice_handler(uint32_t* eax, uint32_t* args) {
   *eax = args[0] + 1;
 }
 
-void syscall_compute_e_handler(uint32_t* eax, uint32_t* args) {}
+void syscall_compute_e_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_pt_create_handler(uint32_t* eax, uint32_t* args) {}
+void syscall_pt_create_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_pt_exit_handler(uint32_t* eax, uint32_t* args) {}
+void syscall_pt_exit_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_pt_join_handler(uint32_t* eax, uint32_t* args) {}
+void syscall_pt_join_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_lock_init_handler(uint32_t* eax, uint32_t* args) {}
+void syscall_lock_init_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_lock_acquire_handler(uint32_t* eax, uint32_t* args) {}
+void syscall_lock_acquire_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_lock_release_handler(uint32_t* eax, uint32_t* args) {}
+void syscall_lock_release_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_sema_init_handler(uint32_t* eax, uint32_t* args) {}
+void syscall_sema_init_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_sema_down_handler(uint32_t* eax, uint32_t* args) {}
+void syscall_sema_down_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_sema_up_handler(uint32_t* eax, uint32_t* args) {}
+void syscall_sema_up_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_get_tid_handler(uint32_t* eax, uint32_t* args) {}
+void syscall_get_tid_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_nmap_handler(uint32_t* eax, uint32_t* args) {}
+void syscall_nmap_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_munmap_handler(uint32_t* eax, uint32_t* args) {}
+void syscall_munmap_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_chdir_handler(uint32_t* eax, uint32_t* args) {}
+void syscall_chdir_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_mkdir_handler(uint32_t* eax, uint32_t* args) {}
+void syscall_mkdir_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_readdir_handler(uint32_t* eax, uint32_t* args) {}
+void syscall_readdir_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_isdir_handler(uint32_t* eax, uint32_t* args) {}
+void syscall_isdir_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_inumber_handler(uint32_t* eax, uint32_t* args) {}
+void syscall_inumber_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
 /* Handles syscalls right after they're called. First checks
    if the syscall identifier is valid memory, then checks if
    it is a valid syscall, then if the arguments are valid. */
 static void syscall_handler(struct intr_frame* f) {
-  uint32_t* args = ((uint32_t*)f->esp);
+  const uint32_t* args = ((uint32_t*)f->esp);
 
   /* Check syscall number is in user memory */
   if (!are_valid_args(args, 1) || args[0] >= 32) {
@@ -257,9 +258,9 @@ static void syscall_handler(struct intr_frame* f) {
   }
 
   /* Copy args to kernel stack */
-  uint32_t* args_copy[num_args];
-  memcpy(args_copy, args + 1, num_args * sizeof(uint32_t));
+  uint32_t args_cpy[num_args];
+  memcpy(args_cpy, args + 1, num_args * sizeof(uint32_t));
 
   /* Call corresponding handler function */
-  syscall_table[syscall_number].handler(&(f->eax), args_copy);
+  syscall_table[syscall_number].handler(&(f->eax), args_cpy);
 }
