@@ -3,6 +3,7 @@
 #include <string.h>
 #include <syscall-nr.h>
 #include <kernel/stdio.h>
+#include "devices/shutdown.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 #include "threads/interrupt.h"
@@ -136,7 +137,9 @@ struct syscall_info syscall_table[] = {
     {1, syscall_inumber_handler},
 };
 
-void syscall_halt_handler(uint32_t* eax, uint32_t* args) {}
+void syscall_halt_handler(uint32_t* eax, uint32_t* args) {
+  shutdown_power_off();
+}
 
 void syscall_exit_handler(uint32_t* eax, uint32_t* args) {
   process_exit(args[0]);
