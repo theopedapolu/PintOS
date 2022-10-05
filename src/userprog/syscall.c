@@ -36,8 +36,10 @@ static bool are_valid_args(const int32_t* args, size_t num_args) {
 
 /* Returns true if the string STR is in valid user memory. */
 static bool is_valid_string(const char* str) {
-  // TODO: implement is_valid_string
-  return true;
+  while (is_valid_uaddr(str) && *str != NULL) {
+    str += 1;
+  }
+  return is_valid_uaddr(str);
 }
 
 /* Type declaration for a syscall handler. EAX is a pointer 
@@ -103,38 +105,38 @@ syscall_handler_func_t syscall_inumber_handler;
    the number of arguments it has and the function handler 
    assigned to deal with it. */
 struct syscall_info syscall_table[] = {
-    {0, syscall_halt_handler},
-    {1, syscall_exit_handler},
-    {1, syscall_exec_handler},
-    {1, syscall_wait_handler},
-    {2, syscall_create_handler},
-    {1, syscall_remove_handler},
-    {1, syscall_open_handler},
-    {1, syscall_filesize_handler},
-    {3, syscall_read_handler},
-    {3, syscall_write_handler},
-    {2, syscall_seek_handler},
-    {1, syscall_tell_handler},
-    {1, syscall_close_handler},
-    {1, syscall_practice_handler},
-    {1, syscall_compute_e_handler},
-    {3, syscall_pt_create_handler},
-    {0, syscall_pt_exit_handler},
-    {1, syscall_pt_join_handler},
-    {1, syscall_lock_init_handler},
-    {1, syscall_lock_acquire_handler},
-    {1, syscall_lock_release_handler},
-    {2, syscall_sema_init_handler},
-    {1, syscall_sema_down_handler},
-    {1, syscall_sema_up_handler},
-    {0, syscall_get_tid_handler},
-    {2, syscall_nmap_handler},
-    {1, syscall_munmap_handler},
-    {1, syscall_chdir_handler},
-    {1, syscall_mkdir_handler},
-    {2, syscall_readdir_handler},
-    {1, syscall_isdir_handler},
-    {1, syscall_inumber_handler},
+  {0, syscall_halt_handler},
+  {1, syscall_exit_handler},
+  {1, syscall_exec_handler},
+  {1, syscall_wait_handler},
+  {2, syscall_create_handler},
+  {1, syscall_remove_handler},
+  {1, syscall_open_handler},
+  {1, syscall_filesize_handler},
+  {3, syscall_read_handler},
+  {3, syscall_write_handler},
+  {2, syscall_seek_handler},
+  {1, syscall_tell_handler},
+  {1, syscall_close_handler},
+  {1, syscall_practice_handler},
+  {1, syscall_compute_e_handler},
+  {3, syscall_pt_create_handler},
+  {0, syscall_pt_exit_handler},
+  {1, syscall_pt_join_handler},
+  {1, syscall_lock_init_handler},
+  {1, syscall_lock_acquire_handler},
+  {1, syscall_lock_release_handler},
+  {2, syscall_sema_init_handler},
+  {1, syscall_sema_down_handler},
+  {1, syscall_sema_up_handler},
+  {0, syscall_get_tid_handler},
+  {2, syscall_nmap_handler},
+  {1, syscall_munmap_handler},
+  {1, syscall_chdir_handler},
+  {1, syscall_mkdir_handler},
+  {2, syscall_readdir_handler},
+  {1, syscall_isdir_handler},
+  {1, syscall_inumber_handler},
 };
 
 void syscall_halt_handler(uint32_t* eax, uint32_t* args) {
