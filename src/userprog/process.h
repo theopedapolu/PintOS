@@ -21,6 +21,19 @@ typedef tid_t pid_t;
 typedef void (*pthread_fun)(void*);
 typedef void (*stub_fun)(pthread_fun, void*);
 
+/* A process's exit status. The PCB for each process contains a
+   pointer to its exit status, and a list of its children's exit
+   statuses. */
+struct exit_status {
+  pid_t pid;                  /* Process id */
+  int status;                 /* Exit status */
+  bool exited;                /* True if exited, false otherwise */
+  int ref_cnt;                /* Initialize to 2 */
+  struct lock ref_cnt_lock;   /* Lock for ref_cnt */
+  struct semaphore exit_wait; /* Down'd by parent's process_wait, up'd by process_exit */
+  struct list_elem elem;      /* List element for PCB's child_exit_statuses */
+};
+
 /* The process control block for a given process. Since
    there can be multiple threads per process, we need a separate
    PCB from the TCB. All TCBs in a process will have a pointer
@@ -28,9 +41,11 @@ typedef void (*stub_fun)(pthread_fun, void*);
    of the process, which is `special`. */
 struct process {
   /* Owned by process.c. */
-  uint32_t* pagedir;          /* Page directory. */
-  char process_name[16];      /* Name of the main thread */
-  struct thread* main_thread; /* Pointer to main thread */
+  uint32_t* pagedir;               /* Page directory. */
+  char process_name[16];           /* Name of the main thread */
+  struct thread* main_thread;      /* Pointer to main thread */
+  struct exit_status* exit_status; /* Point to this process's exit status */
+  struct list child_exit_statuses; /* List of children's exit statuses */
 };
 
 void userprog_init(void);
