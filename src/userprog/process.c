@@ -8,6 +8,7 @@
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
+#include "userprog/userfile.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -86,6 +87,8 @@ static void start_process(void* file_name_) {
     // Ensure that timer_interrupt() -> schedule() -> process_activate()
     // does not try to activate our uninitialized pagedir
     new_pcb->pagedir = NULL;
+    new_pcb->num_opened_files = 2; // Skip stdin and stdout
+    list_init(&(new_pcb->user_files));
     t->pcb = new_pcb;
 
     // Continue initializing the PCB as normal
@@ -109,6 +112,14 @@ static void start_process(void* file_name_) {
     // can try to activate the pagedir, but it is now freed memory
     struct process* pcb_to_free = t->pcb;
     t->pcb = NULL;
+
+    struct list_elem* e;
+
+    for (e = list_begin(&(pcb_to_free->user_files)); e != list_end(&(pcb_to_free->user_files));
+         e = list_next(e)) {
+      struct foo* f = list_entry(e, struct user_file, elem);
+    }
+
     free(pcb_to_free);
   }
 
