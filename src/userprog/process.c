@@ -236,6 +236,29 @@ void process_exit(int status) {
     pagedir_destroy(pd);
   }
 
+  while (!list_empty(&cur->pcb->child_exit_statuses)) {
+    struct list_elem* e = list_pop_front(&cur->pcb->child_exit_statuses);
+    struct exit_status* exit_status = list_entry(e, struct exit_status, elem);
+    lock_acquire(&exit_status->ref_cnt_lock);
+    exit_status->ref_cnt -= 1;
+    int ref_cnt = exit_status->ref_cnt;
+    lock_release(&exit_status->ref_cnt_lock);
+    if (ref_cnt == 0) {
+      free(exit_status);
+    }
+  }
+
+  lock_acquire(&cur->pcb->exit_status->ref_cnt_lock);
+  int ref_cnt = cur->pcb->exit_status->ref_cnt -= 1;
+  lock_release(&cur->pcb->exit_status->ref_cnt_lock);
+  if (ref_cnt == 0) {
+    free(cur->pcb->exit_status);
+  } else {
+    cur->pcb->exit_status->status = status;
+    cur->pcb->exit_status->exited = true;
+    sema_up(&cur->pcb->exit_status->exit_wait);
+  }
+
   /* Free the PCB of this process and kill this thread
      Avoid race where PCB is freed before t->pcb is set to NULL
      If this happens, then an unfortuantely timed timer interrupt
