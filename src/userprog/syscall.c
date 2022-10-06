@@ -3,6 +3,7 @@
 #include <string.h>
 #include <syscall-nr.h>
 #include <kernel/stdio.h>
+#include "devices/input.h"
 #include "devices/shutdown.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -11,6 +12,12 @@
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
 #include "userprog/process.h"
+
+/* According to pintos spec, you can only write at most
+   a few hundred bytes at a time without risk over text
+   overlapping on stdout. Although we use a global lock
+   right now, this may become a concern later. */
+#define STDOUT_WRITE_CHUNK_SIZE 256
 
 /* Returns true if VADDR is in valid user memory. */
 static bool is_valid_uaddr(const void* vaddr) {
@@ -151,30 +158,167 @@ void syscall_exec_handler(uint32_t* eax, uint32_t* args) {
 
 void syscall_wait_handler(uint32_t* eax, uint32_t* args) { *eax = process_wait(args[0]); }
 
-void syscall_create_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
+void syscall_create_handler(uint32_t* eax, uint32_t* args) {
+  const char* file_u = args[0];
+  unsigned initial_size = args[1];
 
-void syscall_remove_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
-
-void syscall_open_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
-
-void syscall_filesize_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
-
-void syscall_read_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
-
-void syscall_write_handler(uint32_t* eax, uint32_t* args) {
-  if (args[0] == STDOUT_FILENO) {
-    putbuf((const void*)args[1], (size_t)args[2]);
-    *eax = args[2];
+  if (!is_valid_string(file_u)) {
+    process_exit(-1);
+    return;
   }
 
-  // TODO: Implement file writes other than stdout
+  size_t file_len = strlen(file_u);
+  char file[file_len + 1];
+  strlcpy(file, file_u, file_len + 1);
+
+  bool result = filesys_create(file, initial_size);
+  *eax = result;
 }
 
-void syscall_seek_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
+void syscall_remove_handler(uint32_t* eax, uint32_t* args) {
+  const char* file_u = args[0];
 
-void syscall_tell_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
+  if (!is_valid_string(file_u)) {
+    process_exit(-1);
+    return;
+  }
 
-void syscall_close_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
+  size_t file_len = strlen(file_u);
+  char file[file_len + 1];
+  strlcpy(file, file_u, file_len + 1);
+
+  bool result = filesys_remove(file);
+  *eax = result;
+}
+
+void syscall_open_handler(uint32_t* eax, uint32_t* args) {
+  const char* file_u = args[0];
+
+  if (!is_valid_string(file_u)) {
+    process_exit(-1);
+    return;
+  }
+
+  size_t file_len = strlen(file_u);
+  char file[file_len + 1];
+  strlcpy(file, file_u, file_len + 1);
+
+  struct process* pcb = thread_current()->pcb;
+
+  int result = user_file_open(&pcb->user_files, file, pcb->num_opened_files++);
+  *eax = result;
+}
+
+void syscall_filesize_handler(uint32_t* eax, uint32_t* args) {
+  int fd = args[0];
+
+  struct user_file* uf = user_file_get(&thread_current()->pcb->user_files, fd);
+  if (uf == NULL) {
+    *eax = 0;
+    return;
+  }
+
+  off_t result = file_length(uf->file);
+  *eax = result;
+}
+
+void syscall_read_handler(uint32_t* eax, uint32_t* args) {
+  int fd = args[0];
+  void* buffer = args[1];
+  unsigned length = args[2];
+
+  if (!is_valid_user_memory(buffer, length + 1)) {
+    process_exit(-1);
+    return;
+  }
+
+  if (fd == STDIN_FILENO) {
+    int i;
+    for (i = 0; i < length; i++) {
+      ((char*)(buffer))[i] = input_getc();
+    }
+    ((char*)(buffer))[i + 1] = '\0';
+
+    *eax = length;
+    return;
+  }
+
+  struct user_file* uf = user_file_get(&thread_current()->pcb->user_files, fd);
+  if (uf == NULL) {
+    *eax = 0;
+    return;
+  }
+
+  off_t result = file_read(uf->file, buffer, length);
+  *eax = result;
+}
+
+void syscall_write_handler(uint32_t* eax, uint32_t* args) {
+  int fd = args[0];
+  const void* buffer_u = args[1];
+  unsigned length = args[2];
+
+  if (!is_valid_user_memory(buffer_u, length + 1)) {
+    process_exit(-1);
+    return;
+  }
+
+  size_t buffer_len = strlen(buffer_u);
+  char buffer[buffer_len + 1];
+  strlcpy(buffer, buffer_u, buffer_len + 1);
+
+  void* buffer_ptr = buffer;
+  if (fd == STDOUT_FILENO) {
+    while (length >= STDOUT_WRITE_CHUNK_SIZE) {
+      putbuf(buffer_ptr, STDOUT_WRITE_CHUNK_SIZE);
+      buffer_ptr += STDOUT_WRITE_CHUNK_SIZE;
+      length -= STDOUT_WRITE_CHUNK_SIZE;
+    }
+    putbuf(buffer_ptr, length);
+    *eax = length;
+    return;
+  }
+
+  struct user_file* uf = user_file_get(&thread_current()->pcb->user_files, fd);
+  if (uf == NULL) {
+    *eax = 0;
+    return;
+  }
+
+  off_t result = file_write(uf->file, buffer, length);
+  *eax = result;
+}
+
+void syscall_seek_handler(uint32_t* eax, uint32_t* args) {
+  int fd = args[0];
+  unsigned position = args[1];
+
+  struct user_file* uf = user_file_get(&thread_current()->pcb->user_files, fd);
+  if (uf == NULL) {
+    return;
+  }
+
+  file_seek(uf->file, position);
+}
+
+void syscall_tell_handler(uint32_t* eax, uint32_t* args) {
+  int fd = args[0];
+
+  struct user_file* uf = user_file_get(&thread_current()->pcb->user_files, fd);
+  if (uf == NULL) {
+    *eax = 0;
+    return;
+  }
+
+  off_t result = file_tell(uf->file);
+  return result;
+}
+
+void syscall_close_handler(uint32_t* eax, uint32_t* args) {
+  int fd = args[0];
+
+  user_file_close(&thread_current()->pcb->user_files, fd);
+}
 
 void syscall_practice_handler(uint32_t* eax, uint32_t* args) { *eax = args[0] + 1; }
 
