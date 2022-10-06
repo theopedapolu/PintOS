@@ -27,7 +27,6 @@ struct start_process_args {
   bool success;                   /* Set by start_process, returned to process_execute */
 };
 
-static struct semaphore temporary;
 static thread_func start_process NO_RETURN;
 static thread_func start_pthread NO_RETURN;
 static bool load(const char* file_name, void (**eip)(void), void** esp);
@@ -64,7 +63,6 @@ pid_t process_execute(const char* file_name) {
   char* fn_copy;
   tid_t tid;
 
-  sema_init(&temporary, 0);
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page(0);
@@ -131,6 +129,7 @@ static void start_process(void* args_) {
     // Initialize exit status
     t->pcb->exit_status->pid = t->tid;
     t->pcb->exit_status->status = -1;
+    t->pcb->exit_status->waited = false;
     t->pcb->exit_status->exited = false;
     t->pcb->exit_status->ref_cnt = 2;
     lock_init(&t->pcb->exit_status->ref_cnt_lock);
@@ -178,7 +177,6 @@ static void start_process(void* args_) {
 
   /* Exit on failure or jump to userspace */
   if (!success) {
-    sema_up(&temporary);
     thread_exit();
   }
 
@@ -201,9 +199,35 @@ static void start_process(void* args_) {
 
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
-int process_wait(pid_t child_pid UNUSED) {
-  sema_down(&temporary);
-  return 0;
+int process_wait(pid_t child_pid) {
+  /* Get exit status corresponding to child_pid */
+  struct list* child_exit_statuses = &thread_current()->pcb->child_exit_statuses;
+  struct exit_status* child_exit_status = NULL;
+  for (struct list_elem* e = list_begin(child_exit_statuses); e != list_end(child_exit_statuses);
+       e = list_next(e)) {
+    struct exit_status* ec = list_entry(e, struct exit_status, elem);
+    if (ec->pid == child_pid) {
+      child_exit_status = ec;
+      break;
+    }
+  }
+
+  /* If exit status not found or already waited on, return -1 */
+  if (child_exit_status == NULL || child_exit_status->waited) {
+    return -1;
+  }
+
+  /* Mark child as waited */
+  child_exit_status->waited = true;
+
+  /* If already exited, return exit status */
+  if (child_exit_status->exited) {
+    return child_exit_status->status;
+  }
+
+  /* Otherwise, wait for child to exit and return status */
+  sema_down(&child_exit_status->exit_wait);
+  return child_exit_status->status;
 }
 
 /* Free the current process's resources. */
@@ -267,7 +291,6 @@ void process_exit(int status) {
   cur->pcb = NULL;
   free(pcb_to_free);
 
-  sema_up(&temporary);
   thread_exit();
 }
 

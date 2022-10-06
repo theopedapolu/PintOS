@@ -28,6 +28,7 @@ struct exit_status {
   pid_t pid;                  /* Process id */
   int status;                 /* Exit status */
   bool exited;                /* True if exited, false otherwise */
+  bool waited;                /* True if waited, false otherwise */
   int ref_cnt;                /* Initialize to 2 */
   struct lock ref_cnt_lock;   /* Lock for ref_cnt */
   struct semaphore exit_wait; /* Down'd by parent's process_wait, up'd by process_exit */
