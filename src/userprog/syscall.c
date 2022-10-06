@@ -166,7 +166,7 @@ void syscall_wait_handler(uint32_t* eax, uint32_t* args) { *eax = process_wait(a
 
 void syscall_create_handler(uint32_t* eax, uint32_t* args) {
   lock_acquire(&filesys_lock);
-  const char* file_u = args[0];
+  const char* file_u = (const char*)args[0];
   unsigned initial_size = args[1];
 
   if (!is_valid_string(file_u)) {
@@ -186,7 +186,7 @@ void syscall_create_handler(uint32_t* eax, uint32_t* args) {
 
 void syscall_remove_handler(uint32_t* eax, uint32_t* args) {
   lock_acquire(&filesys_lock);
-  const char* file_u = args[0];
+  const char* file_u = (const char*)args[0];
 
   if (!is_valid_string(file_u)) {
     lock_release(&filesys_lock);
@@ -205,7 +205,7 @@ void syscall_remove_handler(uint32_t* eax, uint32_t* args) {
 
 void syscall_open_handler(uint32_t* eax, uint32_t* args) {
   lock_acquire(&filesys_lock);
-  const char* file_u = args[0];
+  const char* file_u = (const char*)args[0];
 
   if (!is_valid_string(file_u)) {
     lock_release(&filesys_lock);
@@ -243,7 +243,7 @@ void syscall_filesize_handler(uint32_t* eax, uint32_t* args) {
 void syscall_read_handler(uint32_t* eax, uint32_t* args) {
   lock_acquire(&filesys_lock);
   int fd = args[0];
-  void* buffer = args[1];
+  void* buffer = (void*)args[1];
   unsigned length = args[2];
 
   if (!is_valid_user_memory(buffer, length + 1)) {
@@ -253,7 +253,7 @@ void syscall_read_handler(uint32_t* eax, uint32_t* args) {
   }
 
   if (fd == STDIN_FILENO) {
-    int i;
+    unsigned i;
     for (i = 0; i < length; i++) {
       ((char*)(buffer))[i] = input_getc();
     }
@@ -279,7 +279,7 @@ void syscall_read_handler(uint32_t* eax, uint32_t* args) {
 void syscall_write_handler(uint32_t* eax, uint32_t* args) {
   lock_acquire(&filesys_lock);
   int fd = args[0];
-  const void* buffer_u = args[1];
+  const void* buffer_u = (const void*)args[1];
   unsigned length = args[2];
 
   if (!is_valid_user_memory(buffer_u, length + 1)) {
@@ -317,7 +317,7 @@ void syscall_write_handler(uint32_t* eax, uint32_t* args) {
   lock_release(&filesys_lock);
 }
 
-void syscall_seek_handler(uint32_t* eax, uint32_t* args) {
+void syscall_seek_handler(uint32_t* eax UNUSED, uint32_t* args) {
   lock_acquire(&filesys_lock);
   int fd = args[0];
   unsigned position = args[1];
@@ -344,11 +344,11 @@ void syscall_tell_handler(uint32_t* eax, uint32_t* args) {
   }
 
   off_t result = file_tell(uf->file);
+  *eax = result;
   lock_release(&filesys_lock);
-  return result;
 }
 
-void syscall_close_handler(uint32_t* eax, uint32_t* args) {
+void syscall_close_handler(uint32_t* eax UNUSED, uint32_t* args) {
   lock_acquire(&filesys_lock);
   int fd = args[0];
 
