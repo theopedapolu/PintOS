@@ -20,7 +20,7 @@
 #define STDOUT_WRITE_CHUNK_SIZE 256
 
 /* Global filesystem lock */
-const struct lock filesys_lock;
+struct lock filesys_lock;
 
 /* Returns true if VADDR is in valid user memory. */
 static bool is_valid_uaddr(const void* vaddr) {
