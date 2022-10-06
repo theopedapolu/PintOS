@@ -1,8 +1,8 @@
 #ifndef USERPROG_PROCESS_H
 #define USERPROG_PROCESS_H
 
-#include "userprog/userfile.h"
 #include "threads/thread.h"
+#include "userprog/userfile.h"
 #include <stdint.h>
 
 // At most 8MB can be allocated to the stack

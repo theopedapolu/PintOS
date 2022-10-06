@@ -12,6 +12,7 @@
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
 #include "userprog/process.h"
+#include "userprog/userfile.h"
 
 /* According to pintos spec, you can only write at most
    a few hundred bytes at a time without risk over text
@@ -219,8 +220,8 @@ void syscall_open_handler(uint32_t* eax, uint32_t* args) {
 
   struct process* pcb = thread_current()->pcb;
 
-  int result = user_file_open(&pcb->user_files, file, pcb->num_opened_files++);
-  *eax = result;
+  user_file_open(&pcb->user_files, file, pcb->num_opened_files++);
+  *eax = pcb->num_opened_files;
   lock_release(&filesys_lock);
 }
 
