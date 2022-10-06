@@ -19,6 +19,9 @@
    right now, this may become a concern later. */
 #define STDOUT_WRITE_CHUNK_SIZE 256
 
+/* Global filesystem lock */
+const struct lock filesys_lock;
+
 /* Returns true if VADDR is in valid user memory. */
 static bool is_valid_uaddr(const void* vaddr) {
   return vaddr != NULL && is_user_vaddr(vaddr) &&
@@ -70,7 +73,10 @@ struct syscall_info {
    This is the first function called on a syscall. */
 static void syscall_handler(struct intr_frame*);
 
-void syscall_init(void) { intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall"); }
+void syscall_init(void) {
+  intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
+  lock_init(&filesys_lock);
+}
 
 /* These are all the declarations for the specific syscall
    handlers that will need to be implemented below.
@@ -159,10 +165,12 @@ void syscall_exec_handler(uint32_t* eax, uint32_t* args) {
 void syscall_wait_handler(uint32_t* eax, uint32_t* args) { *eax = process_wait(args[0]); }
 
 void syscall_create_handler(uint32_t* eax, uint32_t* args) {
+  lock_acquire(&filesys_lock);
   const char* file_u = args[0];
   unsigned initial_size = args[1];
 
   if (!is_valid_string(file_u)) {
+    lock_release(&filesys_lock);
     process_exit(-1);
     return;
   }
@@ -173,12 +181,15 @@ void syscall_create_handler(uint32_t* eax, uint32_t* args) {
 
   bool result = filesys_create(file, initial_size);
   *eax = result;
+  lock_release(&filesys_lock);
 }
 
 void syscall_remove_handler(uint32_t* eax, uint32_t* args) {
+  lock_acquire(&filesys_lock);
   const char* file_u = args[0];
 
   if (!is_valid_string(file_u)) {
+    lock_release(&filesys_lock);
     process_exit(-1);
     return;
   }
@@ -189,12 +200,15 @@ void syscall_remove_handler(uint32_t* eax, uint32_t* args) {
 
   bool result = filesys_remove(file);
   *eax = result;
+  lock_release(&filesys_lock);
 }
 
 void syscall_open_handler(uint32_t* eax, uint32_t* args) {
+  lock_acquire(&filesys_lock);
   const char* file_u = args[0];
 
   if (!is_valid_string(file_u)) {
+    lock_release(&filesys_lock);
     process_exit(-1);
     return;
   }
@@ -207,27 +221,33 @@ void syscall_open_handler(uint32_t* eax, uint32_t* args) {
 
   int result = user_file_open(&pcb->user_files, file, pcb->num_opened_files++);
   *eax = result;
+  lock_release(&filesys_lock);
 }
 
 void syscall_filesize_handler(uint32_t* eax, uint32_t* args) {
+  lock_acquire(&filesys_lock);
   int fd = args[0];
 
   struct user_file* uf = user_file_get(&thread_current()->pcb->user_files, fd);
   if (uf == NULL) {
     *eax = 0;
+    lock_release(&filesys_lock);
     return;
   }
 
   off_t result = file_length(uf->file);
   *eax = result;
+  lock_release(&filesys_lock);
 }
 
 void syscall_read_handler(uint32_t* eax, uint32_t* args) {
+  lock_acquire(&filesys_lock);
   int fd = args[0];
   void* buffer = args[1];
   unsigned length = args[2];
 
   if (!is_valid_user_memory(buffer, length + 1)) {
+    lock_release(&filesys_lock);
     process_exit(-1);
     return;
   }
@@ -240,25 +260,30 @@ void syscall_read_handler(uint32_t* eax, uint32_t* args) {
     ((char*)(buffer))[i + 1] = '\0';
 
     *eax = length;
+    lock_release(&filesys_lock);
     return;
   }
 
   struct user_file* uf = user_file_get(&thread_current()->pcb->user_files, fd);
   if (uf == NULL) {
     *eax = 0;
+    lock_release(&filesys_lock);
     return;
   }
 
   off_t result = file_read(uf->file, buffer, length);
   *eax = result;
+  lock_release(&filesys_lock);
 }
 
 void syscall_write_handler(uint32_t* eax, uint32_t* args) {
+  lock_acquire(&filesys_lock);
   int fd = args[0];
   const void* buffer_u = args[1];
   unsigned length = args[2];
 
   if (!is_valid_user_memory(buffer_u, length + 1)) {
+    lock_release(&filesys_lock);
     process_exit(-1);
     return;
   }
@@ -276,48 +301,59 @@ void syscall_write_handler(uint32_t* eax, uint32_t* args) {
     }
     putbuf(buffer_ptr, length);
     *eax = length;
+    lock_release(&filesys_lock);
     return;
   }
 
   struct user_file* uf = user_file_get(&thread_current()->pcb->user_files, fd);
   if (uf == NULL) {
     *eax = 0;
+    lock_release(&filesys_lock);
     return;
   }
 
   off_t result = file_write(uf->file, buffer, length);
   *eax = result;
+  lock_release(&filesys_lock);
 }
 
 void syscall_seek_handler(uint32_t* eax, uint32_t* args) {
+  lock_acquire(&filesys_lock);
   int fd = args[0];
   unsigned position = args[1];
 
   struct user_file* uf = user_file_get(&thread_current()->pcb->user_files, fd);
   if (uf == NULL) {
+    lock_release(&filesys_lock);
     return;
   }
 
   file_seek(uf->file, position);
+  lock_release(&filesys_lock);
 }
 
 void syscall_tell_handler(uint32_t* eax, uint32_t* args) {
+  lock_acquire(&filesys_lock);
   int fd = args[0];
 
   struct user_file* uf = user_file_get(&thread_current()->pcb->user_files, fd);
   if (uf == NULL) {
     *eax = 0;
+    lock_release(&filesys_lock);
     return;
   }
 
   off_t result = file_tell(uf->file);
+  lock_release(&filesys_lock);
   return result;
 }
 
 void syscall_close_handler(uint32_t* eax, uint32_t* args) {
+  lock_acquire(&filesys_lock);
   int fd = args[0];
 
   user_file_close(&thread_current()->pcb->user_files, fd);
+  lock_release(&filesys_lock);
 }
 
 void syscall_practice_handler(uint32_t* eax, uint32_t* args) { *eax = args[0] + 1; }
