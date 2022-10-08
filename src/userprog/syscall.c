@@ -221,7 +221,7 @@ void syscall_open_handler(uint32_t* eax, uint32_t* args) {
   struct process* pcb = thread_current()->pcb;
 
   user_file_open(&pcb->user_files, file, pcb->num_opened_files++);
-  *eax = pcb->num_opened_files;
+  *eax = pcb->num_opened_files - 1;
   lock_release(&filesys_lock);
 }
 
@@ -289,19 +289,18 @@ void syscall_write_handler(uint32_t* eax, uint32_t* args) {
     return;
   }
 
-  size_t buffer_len = strlen(buffer_u);
-  char buffer[buffer_len + 1];
-  strlcpy(buffer, buffer_u, buffer_len + 1);
+  char buffer[length + 1];
+  strlcpy(buffer, buffer_u, length + 1);
 
   void* buffer_ptr = buffer;
   if (fd == STDOUT_FILENO) {
+    *eax = length;
     while (length >= STDOUT_WRITE_CHUNK_SIZE) {
       putbuf(buffer_ptr, STDOUT_WRITE_CHUNK_SIZE);
       buffer_ptr += STDOUT_WRITE_CHUNK_SIZE;
       length -= STDOUT_WRITE_CHUNK_SIZE;
     }
     putbuf(buffer_ptr, length);
-    *eax = length;
     lock_release(&filesys_lock);
     return;
   }
