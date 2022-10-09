@@ -280,17 +280,14 @@ void syscall_read_handler(uint32_t* eax, uint32_t* args) {
 void syscall_write_handler(uint32_t* eax, uint32_t* args) {
   lock_acquire(&filesys_lock);
   int fd = args[0];
-  const void* buffer_u = (const void*)args[1];
+  const void* buffer = (const void*)args[1];
   unsigned length = args[2];
 
-  if (!is_valid_user_memory(buffer_u, length + 1)) {
+  if (!is_valid_user_memory(buffer, length + 1)) {
     lock_release(&filesys_lock);
     process_exit(-1);
     return;
   }
-
-  char buffer[length + 1];
-  strlcpy(buffer, buffer_u, length + 1);
 
   void* buffer_ptr = buffer;
   if (fd == STDOUT_FILENO) {
