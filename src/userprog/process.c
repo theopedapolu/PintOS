@@ -153,10 +153,8 @@ static void start_process(void* args_) {
   }
 
   /* Temporarily save fpu state in temp, initialize sf->fpu_state for new thread, restore current thread's fpu state*/
-  asm_volatile("fsave 0(%0); fsave 0(%1); frstor 0(%0)"
-               :
-               : "g"(temp), "g"(if_->fpu_state)
-               : "memory");
+  asm volatile("fsave 0(%0); fsave 0(%1); frstor 0(%0)" ::"g"(temp), "g"(if_.fpu_state) : "memory");
+
   /* Handle failure with successful exit status and PCB malloc.
      Must remove exit status from parent. */
   if (!success && es_success && pcb_success) {

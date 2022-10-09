@@ -23,6 +23,7 @@ intr_entry:
 	pushl %fs
 	pushl %gs
 	pushal
+   addl $-108, %esp
    fsave 0(%esp)
 
 	/* Set up kernel environment. */
@@ -52,6 +53,7 @@ intr_entry:
 intr_exit:
 	/* Restore caller's registers and FPU state */
    frstor 0(%esp)
+   addl $108, %esp
 	popal
 	popl %gs
 	popl %fs
