@@ -2,6 +2,7 @@
 #define USERPROG_PROCESS_H
 
 #include "threads/thread.h"
+#include "userprog/userfile.h"
 #include <stdint.h>
 
 // At most 8MB can be allocated to the stack
@@ -47,6 +48,8 @@ struct process {
   struct thread* main_thread;      /* Pointer to main thread */
   struct exit_status* exit_status; /* Point to this process's exit status */
   struct list child_exit_statuses; /* List of children's exit statuses */
+  user_file_list user_files;       /* List of open files */
+  int num_opened_files;            /* Number of files previously opened */
 };
 
 void userprog_init(void);
