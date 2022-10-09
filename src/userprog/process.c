@@ -290,6 +290,9 @@ void process_exit(int status) {
     sema_up(&cur->pcb->exit_status->exit_wait);
   }
 
+  /* Close executable file, allowing write */
+  file_close(cur->pcb->exec_file);
+
   /* Free the PCB of this process and kill this thread
      Avoid race where PCB is freed before t->pcb is set to NULL
      If this happens, then an unfortuantely timed timer interrupt
@@ -433,6 +436,8 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
     printf("load: %s: open failed\n", tokens[0]);
     goto done;
   }
+  t->pcb->exec_file = file;
+  file_deny_write(file);
 
   /* Read and verify executable header. */
   if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr ||
@@ -566,7 +571,9 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
 
 done:
   /* We arrive here whether the load is successful or not. */
-  file_close(file);
+  if (!success) {
+    file_close(file);
+  }
   return success;
 }
 

@@ -46,6 +46,7 @@ struct process {
   uint32_t* pagedir;               /* Page directory. */
   char process_name[16];           /* Name of the main thread */
   struct thread* main_thread;      /* Pointer to main thread */
+  struct file* exec_file;          /* The file executed by this process */
   struct exit_status* exit_status; /* Point to this process's exit status */
   struct list child_exit_statuses; /* List of children's exit statuses */
   user_file_list user_files;       /* List of open files */
