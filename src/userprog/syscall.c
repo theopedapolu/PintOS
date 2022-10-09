@@ -220,8 +220,8 @@ void syscall_open_handler(uint32_t* eax, uint32_t* args) {
 
   struct process* pcb = thread_current()->pcb;
 
-  user_file_open(&pcb->user_files, file, pcb->num_opened_files++);
-  *eax = pcb->num_opened_files - 1;
+  int result = user_file_open(&pcb->user_files, file, pcb->num_opened_files++);
+  *eax = result;
   lock_release(&filesys_lock);
 }
 

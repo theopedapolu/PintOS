@@ -6,14 +6,18 @@
 /* Opens a file given a file path and list to add it to.
    This creates a new entry in the list and assigns it a
    file descriptor. */
-void user_file_open(user_file_list* list, const char* file, int fd) {
+int user_file_open(user_file_list* list, const char* file, int fd) {
   struct file* f = filesys_open(file);
+  if (f == NULL)
+    return -1;
+
   struct user_file* uf = malloc(sizeof(struct user_file));
 
   uf->file = f;
   uf->fd = fd;
 
   list_push_back(list, &uf->elem);
+  return fd;
 }
 
 /* Closes a file in the list given a file descriptor.
