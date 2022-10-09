@@ -8,6 +8,7 @@
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
+#include "userprog/userfile.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -20,13 +21,19 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
-static struct semaphore temporary;
+struct start_process_args {
+  char* file_name;                /* Executable's file name */
+  struct process* parent_process; /* PCB of the parent process */
+  struct semaphore exec_wait;     /* Down'd by process_execute, up'd by start_process */
+  bool success;                   /* Set by start_process, returned to process_execute */
+};
+
 static thread_func start_process NO_RETURN;
 static thread_func start_pthread NO_RETURN;
 static bool load(const char* file_name, void (**eip)(void), void** esp);
 bool setup_thread(void (**eip)(void), void** esp);
 
-/* Initializes user programs in the system by ensuring the main
+/* Initializes user programs in the system by ensuring the main 
    thread has a minimal PCB so that it can execute and wait for
    the first user process. Any additions to the PCB should be also
    initialized here if main needs those members */
@@ -44,6 +51,9 @@ void userprog_init(void) {
 
   /* Kill the kernel if we did not succeed */
   ASSERT(success);
+
+  /* Initialize PCB */
+  list_init(&t->pcb->child_exit_statuses);
 }
 
 /* Starts a new thread running a user program loaded from
@@ -54,7 +64,6 @@ pid_t process_execute(const char* file_name) {
   char* fn_copy;
   tid_t tid;
 
-  sema_init(&temporary, 0);
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page(0);
@@ -62,36 +71,76 @@ pid_t process_execute(const char* file_name) {
     return TID_ERROR;
   strlcpy(fn_copy, file_name, PGSIZE);
 
-  /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create(file_name, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
+  /* Create arguments to start_process */
+  struct start_process_args* args = malloc(sizeof(struct start_process_args));
+  if (args == NULL) {
     palloc_free_page(fn_copy);
+    return TID_ERROR;
+  }
+  args->file_name = fn_copy;
+  args->parent_process = thread_current()->pcb;
+  sema_init(&args->exec_wait, 0);
+  args->success = false;
+
+  /* Create a new thread to execute FILE_NAME. */
+  tid = thread_create(file_name, PRI_DEFAULT, start_process, args);
+
+  /* Wait for thread_create to finish, then free fn_copy */
+  sema_down(&args->exec_wait);
+  palloc_free_page(fn_copy);
+
+  /* If start_process failed, should return TID_ERROR */
+  if (!args->success) {
+    tid = TID_ERROR;
+  }
+
+  free(args);
   return tid;
 }
 
 /* A thread function that loads a user process and starts it
    running. */
-static void start_process(void* file_name_) {
-  char* file_name = (char*)file_name_;
+static void start_process(void* args_) {
+  struct start_process_args* args = (struct start_process_args*)args_;
+  char* file_name = args->file_name;
   struct thread* t = thread_current();
   struct intr_frame if_;
-  bool success, pcb_success;
   char temp[108]; // For storing current FPU state during initialization
+  bool success, pcb_success, es_success;
 
-  /* Allocate process control block */
+  /* Allocate process control block and exit status */
   struct process* new_pcb = malloc(sizeof(struct process));
+  struct exit_status* new_es = malloc(sizeof(struct exit_status));
   success = pcb_success = new_pcb != NULL;
+  es_success = new_es != NULL;
+  success = pcb_success && es_success;
 
   /* Initialize process control block */
   if (success) {
     // Ensure that timer_interrupt() -> schedule() -> process_activate()
     // does not try to activate our uninitialized pagedir
     new_pcb->pagedir = NULL;
+    new_pcb->num_opened_files = 2; // Skip stdin and stdout
+    list_init(&(new_pcb->user_files));
     t->pcb = new_pcb;
 
     // Continue initializing the PCB as normal
     t->pcb->main_thread = t;
     strlcpy(t->pcb->process_name, t->name, sizeof t->name);
+    t->pcb->exit_status = new_es;
+    list_init(&t->pcb->child_exit_statuses);
+
+    // Initialize exit status
+    t->pcb->exit_status->pid = t->tid;
+    t->pcb->exit_status->status = -1;
+    t->pcb->exit_status->waited = false;
+    t->pcb->exit_status->exited = false;
+    t->pcb->exit_status->ref_cnt = 2;
+    lock_init(&t->pcb->exit_status->ref_cnt_lock);
+    sema_init(&t->pcb->exit_status->exit_wait, 0);
+
+    // Add exit status to parent
+    list_push_back(&args->parent_process->child_exit_statuses, &t->pcb->exit_status->elem);
   }
 
   /* Initialize interrupt frame and load executable. */
@@ -104,7 +153,22 @@ static void start_process(void* file_name_) {
   }
 
   /* Temporarily save fpu state in temp, initialize sf->fpu_state for new thread, restore current thread's fpu state*/
-  asm_volatile("fsave 0(%0); fsave 0(%1); frstor 0(%0)" : : "g"(temp), "g"(if_->fpu_state) : "memory");
+  asm_volatile("fsave 0(%0); fsave 0(%1); frstor 0(%0)"
+               :
+               : "g"(temp), "g"(if_->fpu_state)
+               : "memory");
+  /* Handle failure with successful exit status and PCB malloc.
+     Must remove exit status from parent. */
+  if (!success && es_success && pcb_success) {
+    struct list_elem* removed = list_pop_back(&args->parent_process->child_exit_statuses);
+    ASSERT(removed == &t->pcb->exit_status->elem);
+  }
+
+  /* Handle failure with successful exit status malloc.
+     Must free exit status. */
+  if (!success && es_success) {
+    free(t->pcb->exit_status);
+  }
 
   /* Handle failure with succesful PCB malloc. Must free the PCB */
   if (!success && pcb_success) {
@@ -113,13 +177,19 @@ static void start_process(void* file_name_) {
     // can try to activate the pagedir, but it is now freed memory
     struct process* pcb_to_free = t->pcb;
     t->pcb = NULL;
+
+    // Destroy the user file list and close all associated files
+    user_file_list_destroy(&pcb_to_free->user_files);
+
     free(pcb_to_free);
   }
 
-  /* Clean up. Exit on failure or jump to userspace */
-  palloc_free_page(file_name);
+  /* Set success for parent, and wake parent. */
+  args->success = success;
+  sema_up(&args->exec_wait);
+
+  /* Exit on failure or jump to userspace */
   if (!success) {
-    sema_up(&temporary);
     thread_exit();
   }
 
@@ -142,13 +212,39 @@ static void start_process(void* file_name_) {
 
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
-int process_wait(pid_t child_pid UNUSED) {
-  sema_down(&temporary);
-  return 0;
+int process_wait(pid_t child_pid) {
+  /* Get exit status corresponding to child_pid */
+  struct list* child_exit_statuses = &thread_current()->pcb->child_exit_statuses;
+  struct exit_status* child_exit_status = NULL;
+  for (struct list_elem* e = list_begin(child_exit_statuses); e != list_end(child_exit_statuses);
+       e = list_next(e)) {
+    struct exit_status* ec = list_entry(e, struct exit_status, elem);
+    if (ec->pid == child_pid) {
+      child_exit_status = ec;
+      break;
+    }
+  }
+
+  /* If exit status not found or already waited on, return -1 */
+  if (child_exit_status == NULL || child_exit_status->waited) {
+    return -1;
+  }
+
+  /* Mark child as waited */
+  child_exit_status->waited = true;
+
+  /* If already exited, return exit status */
+  if (child_exit_status->exited) {
+    return child_exit_status->status;
+  }
+
+  /* Otherwise, wait for child to exit and return status */
+  sema_down(&child_exit_status->exit_wait);
+  return child_exit_status->status;
 }
 
 /* Free the current process's resources. */
-void process_exit(void) {
+void process_exit(int status) {
   struct thread* cur = thread_current();
   uint32_t* pd;
 
@@ -157,6 +253,9 @@ void process_exit(void) {
     thread_exit();
     NOT_REACHED();
   }
+
+  /* Print exit status */
+  printf("%s: exit(%d)\n", cur->pcb->process_name, status);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -174,15 +273,44 @@ void process_exit(void) {
     pagedir_destroy(pd);
   }
 
+  while (!list_empty(&cur->pcb->child_exit_statuses)) {
+    struct list_elem* e = list_pop_front(&cur->pcb->child_exit_statuses);
+    struct exit_status* exit_status = list_entry(e, struct exit_status, elem);
+    lock_acquire(&exit_status->ref_cnt_lock);
+    exit_status->ref_cnt -= 1;
+    int ref_cnt = exit_status->ref_cnt;
+    lock_release(&exit_status->ref_cnt_lock);
+    if (ref_cnt == 0) {
+      free(exit_status);
+    }
+  }
+
+  lock_acquire(&cur->pcb->exit_status->ref_cnt_lock);
+  int ref_cnt = cur->pcb->exit_status->ref_cnt -= 1;
+  lock_release(&cur->pcb->exit_status->ref_cnt_lock);
+  if (ref_cnt == 0) {
+    free(cur->pcb->exit_status);
+  } else {
+    cur->pcb->exit_status->status = status;
+    cur->pcb->exit_status->exited = true;
+    sema_up(&cur->pcb->exit_status->exit_wait);
+  }
+
+  /* Close executable file, allowing write */
+  file_close(cur->pcb->exec_file);
+
   /* Free the PCB of this process and kill this thread
      Avoid race where PCB is freed before t->pcb is set to NULL
      If this happens, then an unfortuantely timed timer interrupt
      can try to activate the pagedir, but it is now freed memory */
   struct process* pcb_to_free = cur->pcb;
   cur->pcb = NULL;
+
+  // Destroy the user file list and close all associated files
+  user_file_list_destroy(&pcb_to_free->user_files);
+
   free(pcb_to_free);
 
-  sema_up(&temporary);
   thread_exit();
 }
 
@@ -278,7 +406,29 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   struct file* file = NULL;
   off_t file_ofs;
   bool success = false;
-  int i;
+
+  char *token, *save_ptr;
+  char* tokens[MAX_ARGUMENTS];
+  int i = 0;
+
+  /* Loops through each token using the builtin strtok_r function and adds it to the list of tokens. */
+  for (token = strtok_r((char*)file_name, " ", &save_ptr); token != NULL || i >= MAX_ARGUMENTS;
+       token = strtok_r(NULL, " ", &save_ptr)) {
+    size_t len = strlen(token) + 1;
+    tokens[i] = malloc(len + 1);
+    strlcpy(tokens[i], token, MAX_ARGUMENT_SIZE);
+    i++;
+  }
+
+  strlcpy(t->pcb->process_name, tokens[0], strlen(tokens[0]) + 1);
+
+  /* Save the number of tokens for later. */
+  int num_tokens = i;
+
+  /* Addresses used for copying argv onto the stack. 
+     This isn't used till later, but since num_tokens is variable it cannot
+     come after goto since this is not allowed by C. */
+  char* arg_addresses[num_tokens];
 
   /* Allocate and activate page directory. */
   t->pcb->pagedir = pagedir_create();
@@ -287,17 +437,19 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   process_activate();
 
   /* Open executable file. */
-  file = filesys_open(file_name);
+  file = filesys_open(tokens[0]);
   if (file == NULL) {
-    printf("load: %s: open failed\n", file_name);
+    printf("load: %s: open failed\n", tokens[0]);
     goto done;
   }
+  t->pcb->exec_file = file;
+  file_deny_write(file);
 
   /* Read and verify executable header. */
   if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr ||
       memcmp(ehdr.e_ident, "\177ELF\1\1\1", 7) || ehdr.e_type != 2 || ehdr.e_machine != 3 ||
       ehdr.e_version != 1 || ehdr.e_phentsize != sizeof(struct Elf32_Phdr) || ehdr.e_phnum > 1024) {
-    printf("load: %s: error loading executable\n", file_name);
+    printf("load: %s: error loading executable\n", tokens[0]);
     goto done;
   }
 
@@ -355,8 +507,69 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   if (!setup_stack(esp))
     goto done;
 
-  char **c = (char **) esp;
-  printf("%s", "Hello");
+  /* Loops through the tokens and adds it to the stack by decrementing
+     the stack pointer by the length of the string (including the null
+     pointer) and running strcpy to that address. */
+  int j;
+  for (j = num_tokens - 1; j >= 0; j--) {
+    size_t len = strlen(tokens[j]);
+    (*((char**)esp)) -= len + 1;
+    strlcpy(*((char**)esp), tokens[j], len + 1);
+
+    // Save the argv addresses for when we're adding them to the stack.
+    arg_addresses[j] = (*((char**)esp));
+  }
+
+  /* Calculate the number of addresses until we reach the bottom of
+     the stack after argc. This value is the num_tokens + 1 (includes
+     null-valued argv[argc]) + 1 (for the address of argv[0]) + 1 (for
+     argc). */
+  int rest_of_data = (num_tokens + 3) * 4;
+
+  /* This is the address at which will be the bottom of the stack
+     (current - rest_of_data). We make it unsigned so rounding down
+     works correctly in the next line. */
+  unsigned int target = (unsigned int)((*((char**)esp) - rest_of_data));
+
+  /* We get the size of the stack alignment by getting the difference
+     between the target and 16-byte offset, calculated by rounding down
+     to be divisible by 16. */
+  int stack_align_value = (int)(target - (target / 16 * 16));
+
+  /* Decrement the stack pointer by however many bytes we need to align
+     the esp. We also fill these values with 0. */
+  *((char**)esp) -= stack_align_value;
+  memset(*((char**)esp), 0, stack_align_value);
+
+  /* Per the C Standard, argv[argc] is to be null in order to cause
+     out-of-bounds argv reading to immediately cause a
+     null-pointer-deference and a segfault. */
+  *((char**)esp) -= 4;
+  **((char***)esp) = 0;
+
+  /* Fill the addresses for each argument in here (using arg_addresses
+     from earlier). */
+  for (j = num_tokens - 1; j >= 0; j--) {
+    *((char**)esp) -= 4;
+    **((char***)esp) = arg_addresses[j];
+  }
+
+  /* Now we're adding the arguments to main() to the stack. Here,
+     we're adding the address to argv, which is right above this
+     address in the stack. */
+  *((char**)esp) -= 4;
+  **((char****)esp) = *((char***)esp) + 1;
+
+  /* Add argc to the stack. */
+  *((char**)esp) -= 4;
+  **((int**)esp) = num_tokens;
+
+  /* Add the return address to the stack. This isn't a real return
+     address as the entry function doesn't ever return, but it is to be
+     consistent across functions. */
+  *((char**)esp) -= 4;
+  **((void***)esp) = NULL;
+
   /* Start address. */
   *eip = (void (*)(void))ehdr.e_entry;
 
@@ -364,7 +577,9 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
 
 done:
   /* We arrive here whether the load is successful or not. */
-  file_close(file);
+  if (!success) {
+    file_close(file);
+  }
   return success;
 }
 
