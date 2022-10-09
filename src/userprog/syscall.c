@@ -247,7 +247,7 @@ void syscall_read_handler(uint32_t* eax, uint32_t* args) {
   void* buffer = (void*)args[1];
   unsigned length = args[2];
 
-  if (!is_valid_user_memory(buffer, length + 1)) {
+  if (!is_valid_user_memory(buffer, length)) {
     lock_release(&filesys_lock);
     process_exit(-1);
     return;
@@ -283,7 +283,7 @@ void syscall_write_handler(uint32_t* eax, uint32_t* args) {
   const void* buffer = (const void*)args[1];
   unsigned length = args[2];
 
-  if (!is_valid_user_memory(buffer, length + 1)) {
+  if (!is_valid_user_memory(buffer, length)) {
     lock_release(&filesys_lock);
     process_exit(-1);
     return;
