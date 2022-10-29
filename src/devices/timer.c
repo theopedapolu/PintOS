@@ -5,7 +5,6 @@
 #include <stdio.h>
 #include "devices/pit.h"
 #include "threads/interrupt.h"
-#include "threads/palloc.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
 
