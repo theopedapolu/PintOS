@@ -105,6 +105,7 @@ static void start_process(void* args_) {
   char* file_name = args->file_name;
   struct thread* t = thread_current();
   struct intr_frame if_;
+  char temp[108]; // For storing current FPU state during initialization
   bool success, pcb_success, es_success;
 
   /* Allocate process control block and exit status */
@@ -150,6 +151,9 @@ static void start_process(void* args_) {
     if_.eflags = FLAG_IF | FLAG_MBS;
     success = load(file_name, &if_.eip, &if_.esp);
   }
+
+  /* Temporarily save fpu state in temp, initialize sf->fpu_state for new thread, restore current thread's fpu state*/
+  asm volatile("fsave 0(%0); fsave 0(%1); frstor 0(%0)" ::"g"(temp), "g"(if_.fpu_state) : "memory");
 
   /* Handle failure with successful exit status and PCB malloc.
      Must remove exit status from parent. */
