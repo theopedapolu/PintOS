@@ -179,6 +179,7 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   struct switch_entry_frame* ef;
   struct switch_threads_frame* sf;
   tid_t tid;
+  char temp[108]; // For storing current FPU state during initialization
 
   ASSERT(function != NULL);
 
@@ -205,6 +206,9 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   sf = alloc_frame(t, sizeof *sf);
   sf->eip = switch_entry;
   sf->ebp = 0;
+
+  /* Temporarily save fpu state in temp, initialize sf->fpu_state for new thread, restore current thread's fpu state*/
+  asm volatile("fsave 0(%0); fsave 0(%1); frstor 0(%0)" ::"g"(temp), "g"(sf->fpu_state) : "memory");
 
   /* Add to run queue. */
   thread_unblock(t);
