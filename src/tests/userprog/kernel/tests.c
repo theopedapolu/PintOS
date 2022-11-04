@@ -6,7 +6,6 @@
 static const struct test userprog_tests[] = {
     {"fp-kasm", test_fp_kasm},
     {"fp-kinit", test_fp_kinit},
-    {"priority-donate-sema-2", test_priority_donate_sema_2},
 };
 
 /* Runs the userprog test named NAME. */
