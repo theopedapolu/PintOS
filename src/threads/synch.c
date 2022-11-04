@@ -195,7 +195,9 @@ void lock_acquire(struct lock* lock) {
 
   enum intr_level old_level = intr_disable();
   cur->lock_waiting = lock;
-  donate_priority();
+  if (active_sched_policy == SCHED_PRIO) {
+    donate_priority();
+  }
   sema_down(&lock->semaphore);
   lock->holder = thread_current();
   cur->lock_waiting = NULL;
@@ -252,7 +254,9 @@ void lock_release(struct lock* lock) {
   lock->holder = NULL;
   sema_up(&lock->semaphore);
   list_remove(&lock->elem);
-  thread_update_effective_priority();
+  if (active_sched_policy == SCHED_PRIO) {
+    thread_update_effective_priority();
+  }
   intr_set_level(old_level);
 }
 
