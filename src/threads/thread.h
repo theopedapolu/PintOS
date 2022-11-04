@@ -88,6 +88,7 @@ struct thread {
   char name[16];             /* Name (for debugging purposes). */
   uint8_t* stack;            /* Saved stack pointer. */
   int priority;              /* Priority. */
+  int64_t wake_ticks;        /* Time to wake this thread. */
   struct list_elem allelem;  /* List element for all threads list. */
 
   /* Shared between thread.c and synch.c. */
@@ -95,6 +96,9 @@ struct thread {
   int effective_priority;    /* Effective priority of this thread. */
   struct lock* lock_waiting; /* Pointer to the lock this thread is waiting on. */
   struct list locks_held;    /* List of locks held by this thread. */
+
+  /* Shared between thread.c and timer.c. */
+  struct list_elem timer_elem; /* List element for sleeping threads list. */
 
 #ifdef USERPROG
   /* Owned by process.c. */
