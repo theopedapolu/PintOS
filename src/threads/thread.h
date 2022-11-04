@@ -91,7 +91,10 @@ struct thread {
   struct list_elem allelem;  /* List element for all threads list. */
 
   /* Shared between thread.c and synch.c. */
-  struct list_elem elem; /* List element. */
+  struct list_elem elem;     /* List element. */
+  int effective_priority;    /* Effective priority of this thread. */
+  struct lock* lock_waiting; /* Pointer to the lock this thread is waiting on. */
+  struct list locks_held;    /* List of locks held by this thread. */
 
 #ifdef USERPROG
   /* Owned by process.c. */
@@ -143,10 +146,13 @@ void thread_foreach(thread_action_func*, void*);
 
 int thread_get_priority(void);
 void thread_set_priority(int);
+void thread_update_effective_priority(void);
 
 int thread_get_nice(void);
 void thread_set_nice(int);
 int thread_get_recent_cpu(void);
 int thread_get_load_avg(void);
+
+list_less_func thread_priority_less;
 
 #endif /* threads/thread.h */
