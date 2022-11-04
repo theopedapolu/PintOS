@@ -64,7 +64,6 @@ static void schedule(void);
 static void thread_enqueue(struct thread* t);
 static tid_t allocate_tid(void);
 void thread_switch_tail(struct thread* prev);
-static void update_effective_priority(void);
 
 static void kernel_thread(thread_func*, void* aux);
 static void idle(void* aux UNUSED);
@@ -355,7 +354,7 @@ void thread_foreach(thread_action_func* func, void* aux) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void thread_set_priority(int new_priority) {
   thread_current()->priority = new_priority;
-  update_effective_priority();
+  thread_update_effective_priority();
 }
 
 /* Returns the current thread's priority. */
@@ -364,7 +363,7 @@ int thread_get_priority(void) { return thread_current()->effective_priority; }
 /* Recalculates the current thread's effective priority using the
    effective priorities of threads that it is blocking. Yields the
    CPU if the thread no longer has the highest effective priority. */
-static void update_effective_priority(void) {
+void thread_update_effective_priority(void) {
   struct thread* cur = thread_current();
   enum intr_level old_level = intr_disable();
 
