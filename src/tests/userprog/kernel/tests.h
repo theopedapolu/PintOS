@@ -7,5 +7,6 @@ void run_userprog_test(const char*);
 
 extern test_func test_fp_kasm;
 extern test_func test_fp_kinit;
+extern test_func test_priority_donate_sema_2;
 
 #endif /* tests/userprog/kernel/tests.h */
