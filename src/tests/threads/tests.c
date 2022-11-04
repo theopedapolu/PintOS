@@ -16,7 +16,6 @@ static const struct test threads_tests[] = {
     {"priority-donate-multiple2", test_priority_donate_multiple2},
     {"priority-donate-nest", test_priority_donate_nest},
     {"priority-donate-sema", test_priority_donate_sema},
-    {"priority-donate-sema-2", test_priority_donate_sema_2},
     {"priority-donate-lower", test_priority_donate_lower},
     {"priority-donate-chain", test_priority_donate_chain},
     {"priority-fifo", test_priority_fifo},
