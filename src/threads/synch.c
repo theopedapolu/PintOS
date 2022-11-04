@@ -102,9 +102,24 @@ void sema_up(struct semaphore* sema) {
   ASSERT(sema != NULL);
 
   old_level = intr_disable();
-  if (!list_empty(&sema->waiters))
-    thread_unblock(list_entry(list_pop_front(&sema->waiters), struct thread, elem));
   sema->value++;
+  if (!list_empty(&sema->waiters)) {
+    if (active_sched_policy == SCHED_PRIO) {
+      struct thread* highest_prio_waiter =
+          list_entry(list_max(&sema->waiters, thread_priority_less, NULL), struct thread, elem);
+      list_remove(&highest_prio_waiter->elem);
+      thread_unblock(highest_prio_waiter);
+      if (highest_prio_waiter->effective_priority > thread_current()->effective_priority) {
+        if (intr_context()) {
+          intr_yield_on_return();
+        } else {
+          thread_yield();
+        }
+      }
+    } else {
+      thread_unblock(list_entry(list_pop_front(&sema->waiters), struct thread, elem));
+    }
+  }
   intr_set_level(old_level);
 }
 
