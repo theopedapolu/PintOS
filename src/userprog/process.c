@@ -141,6 +141,14 @@ static void start_process(void* args_) {
 
     // Add exit status to parent
     list_push_back(&args->parent_process->child_exit_statuses, &t->pcb->exit_status->elem);
+
+    // Initialize user-level synchronization fields in the new PCB
+    list_init(&(t->pcb->all_locks));
+    list_init(&(t->pcb->all_semaphores));
+    lock_init(&(t->pcb->sync_locks));
+    lock_init(&(t->pcb->sync_semaphores));
+    t->pcb->num_locks = 0;
+    t->pcb->num_semaphores = 0;
   }
 
   /* Initialize interrupt frame and load executable. */
