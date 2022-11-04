@@ -15,7 +15,7 @@ static thread_func base_priority_thread;
 struct semaphore sem;
 struct lock loc;
 
-void test_priority_change(void) {
+void test_priority_donate_sema_2(void) {
   /* This test does not work with the MLFQS. */
   ASSERT(active_sched_policy == SCHED_PRIO);
 
