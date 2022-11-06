@@ -55,7 +55,7 @@ struct user_thread {
   struct semaphore join_wait;
   bool exited;
   bool waited;
-};
+} user_thread;
 
 /* The process control block for a given process. Since
    there can be multiple threads per process, we need a separate
@@ -74,7 +74,10 @@ struct process {
   int num_opened_files;            /* Number of files previously opened */
 
   /* User Threads fields*/
-  struct lock user_thread_lock;
+  struct lock pthread_lock;
+  struct list user_threads;
+  struct lock exit_lock;
+  bool exit;
 
   // User synchronization primitive fields
   struct list all_locks;

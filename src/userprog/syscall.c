@@ -360,11 +360,22 @@ void syscall_compute_e_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {
   *eax = res;
 }
 
-void syscall_pt_create_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
+void syscall_pt_create_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {
+  *eax = pthread_execute(args[0], args[1], args[2]);
+}
 
-void syscall_pt_exit_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
+void syscall_pt_exit_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {
+  struct thread* t = thread_current();
+  if (is_main_thread(t, t->pcb)) {
+    pthread_exit_main();
+  } else {
+    pthread_exit();
+  }
+}
 
-void syscall_pt_join_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
+void syscall_pt_join_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {
+  *eax = pthread_join(args[0]);
+}
 
 void syscall_lock_init_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {
   lock_acquire(&thread_current()->pcb->sync_locks);
@@ -478,7 +489,9 @@ void syscall_sema_up_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {
   *eax = false;
 }
 
-void syscall_get_tid_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
+void syscall_get_tid_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {
+  *eax = thread_current()->tid;
+}
 
 void syscall_nmap_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
