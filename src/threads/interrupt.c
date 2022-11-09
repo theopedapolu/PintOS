@@ -360,8 +360,12 @@ void intr_handler(struct intr_frame* frame) {
   // Check if thread needs to be exited
   if (is_trap_from_userspace(frame)) {
     struct thread* cur = thread_current();
-    if (cur->pcb->exit) {
-      pthread_exit();
+    if (cur->pcb->exit_status->exited) {
+      if (is_main_thread(cur, cur->pcb)) {
+        pthread_exit_main();
+      } else {
+        pthread_exit();
+      }
     }
   }
 }
