@@ -154,8 +154,6 @@ static void start_process(void* args_) {
     // Initialize user_thread related fields in the new PCB
     list_init(&(t->pcb->user_threads));
     lock_init(&(t->pcb->pthread_lock));
-    lock_init(&(t->pcb->exit_lock));
-    t->pcb->exit = false;
 
     // Add current main thread to list
     struct user_thread* ut_main = (struct user_thread*)malloc(sizeof(struct user_thread));
@@ -278,10 +276,9 @@ int process_wait(pid_t child_pid) {
   return child_exit_status->status;
 }
 
-/* Free the current process's resources. */
+/* Exit the current process, including all of its threads. */
 void process_exit(int status) {
   struct thread* cur = thread_current();
-  uint32_t* pd;
 
   /* If this thread does not have a PCB, don't worry */
   if (cur->pcb == NULL) {
@@ -289,32 +286,28 @@ void process_exit(int status) {
     NOT_REACHED();
   }
 
-  lock_acquire(&cur->pcb->exit_lock);
   lock_acquire(&cur->pcb->pthread_lock);
-  cur->pcb->exit = true;
-  struct list* user_threads = &cur->pcb->user_threads;
-  for (struct list_elem* e = list_begin(user_threads); e != list_end(user_threads);
-       e = list_next(e)) {
-    struct user_thread* ut = list_entry(e, struct user_thread, elem);
-    if (ut->tid == cur->tid) {
-      ut->exited = true;
-      sema_up(&ut->join_wait);
-      break;
-    }
+
+  /* Set and print exit status, if not yet set. */
+  if (!cur->pcb->exit_status->exited) {
+    cur->pcb->exit_status->exited = true;
+    cur->pcb->exit_status->status = status;
+    printf("%s: exit(%d)\n", cur->pcb->process_name, status);
   }
 
-  for (struct list_elem* e = list_begin(user_threads); e != list_end(user_threads);
-       e = list_next(e)) {
-    struct user_thread* ut = list_entry(e, struct user_thread, elem);
-    if (!ut->exited && !ut->waited) {
-      lock_release(&cur->pcb->pthread_lock);
-      sema_down(&ut->join_wait);
-      lock_acquire(&cur->pcb->pthread_lock);
-    }
-  }
+  lock_release(&cur->pcb->pthread_lock);
 
-  /* Print exit status */
-  printf("%s: exit(%d)\n", cur->pcb->process_name, status);
+  if (is_main_thread(cur, cur->pcb)) {
+    pthread_exit_main();
+  } else {
+    pthread_exit();
+  }
+}
+
+/* Free the current process's resources and signal waiting process. */
+static void destroy_process(void) {
+  struct thread* cur = thread_current();
+  uint32_t* pd;
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -350,8 +343,6 @@ void process_exit(int status) {
   if (ref_cnt == 0) {
     free(cur->pcb->exit_status);
   } else {
-    cur->pcb->exit_status->status = status;
-    cur->pcb->exit_status->exited = true;
     sema_up(&cur->pcb->exit_status->exit_wait);
   }
 
@@ -388,7 +379,6 @@ void process_exit(int status) {
   user_file_list_destroy(&pcb_to_free->user_files);
 
   free(pcb_to_free);
-  thread_exit();
 }
 
 /* Sets up the CPU for running user code in the current
@@ -772,14 +762,13 @@ static bool setup_stack(void** esp) {
   if (kpage != NULL) {
     // Map to first available virtual user page
     uint8_t* page_boundary = (uint8_t*)PHYS_BASE - PGSIZE;
-    while (true) {
+    while (page_boundary >= 0) {
       if (pagedir_get_page(t->pcb->pagedir, page_boundary) == NULL) {
         success = install_page(page_boundary, kpage, true);
         break;
       }
       page_boundary -= PGSIZE;
     }
-    //success = install_page(((uint8_t*)PHYS_BASE) - PGSIZE, kpage, true);
     if (success)
       *esp = page_boundary + PGSIZE - 20;
     else
@@ -1011,12 +1000,6 @@ void pthread_exit_main(void) {
   struct user_thread* ut_main = list_entry(e, struct user_thread, elem);
   ut_main->exited = true;
   sema_up(&ut_main->join_wait);
-  // Free user thread stack and free struct user_thread if waited if true?
-  // uint8_t* kpage = pagedir_get_page(t->pcb->pagedir, (uint8_t*)PHYS_BASE - PGSIZE);
-  // if (kpage != NULL) {
-  //   palloc_free_page(kpage);
-  // }
-  // pagedir_clear_page(t->pcb->pagedir, (uint8_t*)PHYS_BASE - PGSIZE);
 
   for (struct list_elem* e = list_begin(user_threads); e != list_end(user_threads);
        e = list_next(e)) {
@@ -1027,13 +1010,16 @@ void pthread_exit_main(void) {
       lock_acquire(&t->pcb->pthread_lock);
     }
   }
-  lock_release(&t->pcb->pthread_lock);
-  process_exit(0);
-}
 
-void pthread_exit_trap(void) {
-  struct thread* t = thread_current();
-  if (t->pcb->exit) {
-    pthread_exit();
+  /* Set and print exit status to 0, if not yet set. */
+  if (!t->pcb->exit_status->exited) {
+    t->pcb->exit_status->exited = true;
+    t->pcb->exit_status->status = 0;
+    printf("%s: exit(%d)\n", t->pcb->process_name, 0);
   }
+
+  lock_release(&t->pcb->pthread_lock);
+
+  destroy_process();
+  thread_exit();
 }
