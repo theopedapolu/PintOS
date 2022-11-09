@@ -772,14 +772,13 @@ static bool setup_stack(void** esp) {
   if (kpage != NULL) {
     // Map to first available virtual user page
     uint8_t* page_boundary = (uint8_t*)PHYS_BASE - PGSIZE;
-    while (true) {
+    while (page_boundary >= 0) {
       if (pagedir_get_page(t->pcb->pagedir, page_boundary) == NULL) {
         success = install_page(page_boundary, kpage, true);
         break;
       }
       page_boundary -= PGSIZE;
     }
-    //success = install_page(((uint8_t*)PHYS_BASE) - PGSIZE, kpage, true);
     if (success)
       *esp = page_boundary + PGSIZE - 20;
     else
