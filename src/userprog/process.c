@@ -1030,10 +1030,3 @@ void pthread_exit_main(void) {
   lock_release(&t->pcb->pthread_lock);
   process_exit(0);
 }
-
-void pthread_exit_trap(void) {
-  struct thread* t = thread_current();
-  if (t->pcb->exit) {
-    pthread_exit();
-  }
-}
