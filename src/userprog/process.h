@@ -76,7 +76,6 @@ struct process {
   /* User Threads fields*/
   struct lock pthread_lock;
   struct list user_threads;
-  struct lock exit_lock;
 
   // User synchronization primitive fields
   struct list all_locks;

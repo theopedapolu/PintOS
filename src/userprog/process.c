@@ -154,7 +154,6 @@ static void start_process(void* args_) {
     // Initialize user_thread related fields in the new PCB
     list_init(&(t->pcb->user_threads));
     lock_init(&(t->pcb->pthread_lock));
-    lock_init(&(t->pcb->exit_lock));
 
     // Add current main thread to list
     struct user_thread* ut_main = (struct user_thread*)malloc(sizeof(struct user_thread));
