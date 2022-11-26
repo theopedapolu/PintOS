@@ -25,7 +25,16 @@ struct cache_entry buffer_cache[CACHE_SIZE];
 struct lock cache_lock;
 
 /* Initializes the buffer cache module. */
-void cache_init(void) { return; }
+void cache_init(void) {
+  for (int i = 0; i < CACHE_SIZE; i++) {
+    buffer_cache[i].dirty = false;
+    buffer_cache[i].last_accessed = 0;
+    buffer_cache[i].num_accessing = 0;
+    cond_init(&buffer_cache[i].valid_wait);
+    lock_init(&buffer_cache[i].data_lock);
+  }
+  lock_init(&cache_lock);
+}
 
 /* Reads the contents of SECTOR into BUFFER via the cache. */
 void cache_read(block_sector_t sector UNUSED, void* buffer UNUSED) { return; }
