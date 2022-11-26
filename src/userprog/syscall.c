@@ -360,138 +360,25 @@ void syscall_compute_e_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {
   *eax = res;
 }
 
-void syscall_pt_create_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {
-  *eax = pthread_execute(args[0], args[1], args[2]);
-}
+void syscall_pt_create_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_pt_exit_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {
-  struct thread* t = thread_current();
-  if (is_main_thread(t, t->pcb)) {
-    pthread_exit_main();
-  } else {
-    pthread_exit();
-  }
-}
+void syscall_pt_exit_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_pt_join_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {
-  *eax = pthread_join(args[0]);
-}
+void syscall_pt_join_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_lock_init_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {
-  lock_acquire(&thread_current()->pcb->sync_locks);
-  char* lock = args[0];
-  struct user_lock* u_lock = (struct user_lock*)malloc(sizeof(struct user_lock));
-  if (lock == NULL || u_lock == NULL) {
-    *eax = false;
-    free(u_lock);
-    lock_release(&thread_current()->pcb->sync_locks);
-    return;
-  }
-  lock_init(&(u_lock->kernel_lock));
-  unsigned char num_locks = thread_current()->pcb->num_locks;
-  u_lock->lockID = num_locks;
-  *lock = num_locks;
-  thread_current()->pcb->num_locks += 1;
-  list_push_back(&thread_current()->pcb->all_locks, &u_lock->elem);
-  *eax = true;
-  lock_release(&thread_current()->pcb->sync_locks);
-}
+void syscall_lock_init_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_lock_acquire_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {
-  char* lock = args[0];
-  struct list* all_locks = &thread_current()->pcb->all_locks;
-  for (struct list_elem* e = list_begin(all_locks); e != list_end(all_locks); e = list_next(e)) {
-    struct user_lock* u_lock = list_entry(e, struct user_lock, elem);
-    if (u_lock->lockID == *lock) {
-      if (u_lock->kernel_lock.holder == thread_current()) {
-        *eax = false;
-      } else {
-        lock_acquire(&(u_lock->kernel_lock));
-        *eax = true;
-      }
-      return;
-    }
-  }
-  *eax = false;
-}
+void syscall_lock_acquire_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_lock_release_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {
-  char* lock = args[0];
-  struct list* all_locks = &thread_current()->pcb->all_locks;
-  for (struct list_elem* e = list_begin(all_locks); e != list_end(all_locks); e = list_next(e)) {
-    struct user_lock* u_lock = list_entry(e, struct user_lock, elem);
-    if (u_lock->lockID == *lock) {
-      if (u_lock->kernel_lock.holder != thread_current()) {
-        *eax = false;
-      } else {
-        lock_release(&(u_lock->kernel_lock));
-        *eax = true;
-      }
-      return;
-    }
-  }
-  *eax = false;
-}
+void syscall_lock_release_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_sema_init_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {
-  lock_acquire(&thread_current()->pcb->sync_semaphores);
-  char* sema = args[0];
-  int val = args[1];
-  if (val < 0) {
-    *eax = false;
-    return;
-  }
-  struct user_semaphore* u_sem = (struct user_semaphore*)malloc(sizeof(struct user_semaphore));
-  if (sema == NULL || u_sem == NULL) {
-    *eax = false;
-    free(u_sem);
-    lock_release(&thread_current()->pcb->sync_semaphores);
-    return;
-  }
+void syscall_sema_init_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-  sema_init(&(u_sem->kernel_semaphore), val);
-  unsigned char num_semaphores = thread_current()->pcb->num_semaphores;
-  u_sem->semaID = num_semaphores;
-  *sema = num_semaphores;
-  thread_current()->pcb->num_semaphores += 1;
-  list_push_back(&thread_current()->pcb->all_semaphores, &u_sem->elem);
-  *eax = true;
-  lock_release(&thread_current()->pcb->sync_semaphores);
-}
+void syscall_sema_down_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_sema_down_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {
-  char* sema = args[0];
-  struct list* all_semaphores = &thread_current()->pcb->all_semaphores;
-  for (struct list_elem* e = list_begin(all_semaphores); e != list_end(all_semaphores);
-       e = list_next(e)) {
-    struct user_semaphore* u_sem = list_entry(e, struct user_semaphore, elem);
-    if (u_sem->semaID == *sema) {
-      sema_down(&(u_sem->kernel_semaphore));
-      *eax = true;
-      return;
-    }
-  }
-  *eax = false;
-}
+void syscall_sema_up_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_sema_up_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {
-  char* sema = args[0];
-  struct list* all_semaphores = &thread_current()->pcb->all_semaphores;
-  for (struct list_elem* e = list_begin(all_semaphores); e != list_end(all_semaphores);
-       e = list_next(e)) {
-    struct user_semaphore* u_sem = list_entry(e, struct user_semaphore, elem);
-    if (u_sem->semaID == *sema) {
-      sema_up(&(u_sem->kernel_semaphore));
-      *eax = true;
-      return;
-    }
-  }
-  *eax = false;
-}
-
-void syscall_get_tid_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {
-  *eax = thread_current()->tid;
-}
+void syscall_get_tid_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
 void syscall_nmap_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 

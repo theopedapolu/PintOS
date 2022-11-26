@@ -28,19 +28,10 @@ struct start_process_args {
   bool success;                   /* Set by start_process, returned to process_execute */
 };
 
-struct pthread_args {
-  stub_fun sf;
-  pthread_fun tf;
-  void* arg;
-  struct semaphore create_wait;
-  struct process* pcb;
-  bool success;
-};
-
 static thread_func start_process NO_RETURN;
 static thread_func start_pthread NO_RETURN;
 static bool load(const char* file_name, void (**eip)(void), void** esp);
-bool setup_thread(struct pthread_args* args, void (**eip)(void), void** esp);
+bool setup_thread(void (**eip)(void), void** esp);
 
 /* Initializes user programs in the system by ensuring the main 
    thread has a minimal PCB so that it can execute and wait for
@@ -150,32 +141,6 @@ static void start_process(void* args_) {
 
     // Add exit status to parent
     list_push_back(&args->parent_process->child_exit_statuses, &t->pcb->exit_status->elem);
-
-    // Initialize user_thread related fields in the new PCB
-    list_init(&(t->pcb->user_threads));
-    lock_init(&(t->pcb->pthread_lock));
-
-    // Add current main thread to list
-    struct user_thread* ut_main = (struct user_thread*)malloc(sizeof(struct user_thread));
-    success = success && ut_main != NULL;
-    if (success) {
-      ut_main->tid = t->tid;
-      ut_main->exited = false;
-      ut_main->waited = false;
-      sema_init(&ut_main->join_wait, 0);
-      ut_main->stack = NULL;
-      list_push_back(&t->pcb->user_threads, &ut_main->elem);
-    } else {
-      free(ut_main);
-    }
-
-    // Initialize user-level synchronization fields in the new PCB
-    list_init(&(t->pcb->all_locks));
-    list_init(&(t->pcb->all_semaphores));
-    lock_init(&(t->pcb->sync_locks));
-    lock_init(&(t->pcb->sync_semaphores));
-    t->pcb->num_locks = 0;
-    t->pcb->num_semaphores = 0;
   }
 
   /* Initialize interrupt frame and load executable. */
@@ -276,9 +241,10 @@ int process_wait(pid_t child_pid) {
   return child_exit_status->status;
 }
 
-/* Exit the current process, including all of its threads. */
+/* Free the current process's resources. */
 void process_exit(int status) {
   struct thread* cur = thread_current();
+  uint32_t* pd;
 
   /* If this thread does not have a PCB, don't worry */
   if (cur->pcb == NULL) {
@@ -286,28 +252,8 @@ void process_exit(int status) {
     NOT_REACHED();
   }
 
-  lock_acquire(&cur->pcb->pthread_lock);
-
-  /* Set and print exit status, if not yet set. */
-  if (!cur->pcb->exit_status->exited) {
-    cur->pcb->exit_status->exited = true;
-    cur->pcb->exit_status->status = status;
-    printf("%s: exit(%d)\n", cur->pcb->process_name, status);
-  }
-
-  lock_release(&cur->pcb->pthread_lock);
-
-  if (is_main_thread(cur, cur->pcb)) {
-    pthread_exit_main();
-  } else {
-    pthread_exit();
-  }
-}
-
-/* Free the current process's resources and signal waiting process. */
-static void destroy_process(void) {
-  struct thread* cur = thread_current();
-  uint32_t* pd;
+  /* Print exit status */
+  printf("%s: exit(%d)\n", cur->pcb->process_name, status);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -343,30 +289,13 @@ static void destroy_process(void) {
   if (ref_cnt == 0) {
     free(cur->pcb->exit_status);
   } else {
+    cur->pcb->exit_status->status = status;
+    cur->pcb->exit_status->exited = true;
     sema_up(&cur->pcb->exit_status->exit_wait);
   }
 
   /* Close executable file, allowing write */
   file_close(cur->pcb->exec_file);
-
-  /* Free all user threads */
-  while (!list_empty(&cur->pcb->user_threads)) {
-    struct list_elem* e = list_pop_front(&cur->pcb->user_threads);
-    struct user_thread* ut = list_entry(e, struct user_thread, elem);
-    free(ut);
-  }
-
-  /* Free user-level synchronization fields in pcb */
-  while (!list_empty(&cur->pcb->all_locks)) {
-    struct list_elem* e = list_pop_front(&cur->pcb->all_locks);
-    struct user_lock* u_lock = list_entry(e, struct user_lock, elem);
-    free(u_lock);
-  }
-  while (!list_empty(&cur->pcb->all_semaphores)) {
-    struct list_elem* e = list_pop_front(&cur->pcb->all_semaphores);
-    struct user_lock* u_sem = list_entry(e, struct user_semaphore, elem);
-    free(u_sem);
-  }
 
   /* Free the PCB of this process and kill this thread
      Avoid race where PCB is freed before t->pcb is set to NULL
@@ -379,6 +308,8 @@ static void destroy_process(void) {
   user_file_list_destroy(&pcb_to_free->user_files);
 
   free(pcb_to_free);
+
+  thread_exit();
 }
 
 /* Sets up the CPU for running user code in the current
@@ -754,23 +685,14 @@ static bool load_segment(struct file* file, off_t ofs, uint8_t* upage, uint32_t 
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool setup_stack(void** esp) {
-  struct thread* t = thread_current();
   uint8_t* kpage;
   bool success = false;
 
   kpage = palloc_get_page(PAL_USER | PAL_ZERO);
   if (kpage != NULL) {
-    // Map to first available virtual user page
-    uint8_t* page_boundary = (uint8_t*)PHYS_BASE - PGSIZE;
-    while (page_boundary >= 0) {
-      if (pagedir_get_page(t->pcb->pagedir, page_boundary) == NULL) {
-        success = install_page(page_boundary, kpage, true);
-        break;
-      }
-      page_boundary -= PGSIZE;
-    }
+    success = install_page(((uint8_t*)PHYS_BASE) - PGSIZE, kpage, true);
     if (success)
-      *esp = page_boundary + PGSIZE - 20;
+      *esp = PHYS_BASE;
     else
       palloc_free_page(kpage);
   }
@@ -809,25 +731,7 @@ pid_t get_pid(struct process* p) { return (pid_t)p->main_thread->tid; }
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. You may find it necessary to change the
    function signature. */
-bool setup_thread(struct pthread_args* args, void (**eip)(void) UNUSED, void** esp UNUSED) {
-  process_activate();
-  if (!setup_stack(esp)) {
-    return false;
-  }
-  // Push args->arg and args->tf onto stack with null return address
-  *((char**)esp) -= 4;
-  **((void***)esp) = args->arg;
-
-  *((char**)esp) -= 4;
-  **((pthread_fun***)esp) = args->tf;
-
-  *((char**)esp) -= 4;
-  **((void***)esp) = NULL;
-
-  *eip = args->sf;
-
-  return true;
-}
+bool setup_thread(void (**eip)(void) UNUSED, void** esp UNUSED) { return false; }
 
 /* Starts a new thread with a new user stack running SF, which takes
    TF and ARG as arguments on its user stack. This new thread may be
@@ -838,24 +742,7 @@ bool setup_thread(struct pthread_args* args, void (**eip)(void) UNUSED, void** e
    This function will be implemented in Project 2: Multithreading and
    should be similar to process_execute (). For now, it does nothing.
    */
-tid_t pthread_execute(stub_fun sf UNUSED, pthread_fun tf UNUSED, void* arg UNUSED) {
-  lock_acquire(&thread_current()->pcb->pthread_lock);
-  struct pthread_args* arguments = (struct pthread_args*)malloc(sizeof(struct pthread_args));
-  tid_t tid;
-  arguments->sf = sf;
-  arguments->tf = tf;
-  arguments->arg = arg;
-  arguments->pcb = thread_current()->pcb;
-  sema_init(&(arguments->create_wait), 0);
-  tid = thread_create("stub", PRI_DEFAULT, start_pthread, arguments);
-  sema_down(&(arguments->create_wait));
-  if (!arguments->success) {
-    tid = TID_ERROR;
-  }
-  free(arguments);
-  lock_release(&thread_current()->pcb->pthread_lock);
-  return tid;
-}
+tid_t pthread_execute(stub_fun sf UNUSED, pthread_fun tf UNUSED, void* arg UNUSED) { return -1; }
 
 /* A thread function that creates a new user thread and starts it
    running. Responsible for adding itself to the list of threads in
@@ -863,49 +750,7 @@ tid_t pthread_execute(stub_fun sf UNUSED, pthread_fun tf UNUSED, void* arg UNUSE
 
    This function will be implemented in Project 2: Multithreading and
    should be similar to start_process (). For now, it does nothing. */
-static void start_pthread(void* exec_ UNUSED) {
-  struct intr_frame if_;
-  struct pthread_args* args = (struct pthread_args*)exec_;
-  struct thread* t = thread_current();
-  t->pcb = args->pcb;
-
-  struct user_thread* u_thread = (struct user_thread*)malloc(sizeof(struct user_thread));
-  if (u_thread == NULL) {
-    args->success = false;
-    return;
-  }
-  u_thread->tid = t->tid;
-  u_thread->exited = false;
-  u_thread->waited = false;
-  sema_init(&(u_thread->join_wait), 0);
-  list_push_back(&t->pcb->user_threads, &u_thread->elem);
-
-  /* Set interrupt frame flags, copied from start_process() */
-  memset(&if_, 0, sizeof if_);
-  if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
-  if_.cs = SEL_UCSEG;
-  if_.eflags = FLAG_IF | FLAG_MBS;
-  bool success = setup_thread(args, &if_.eip, &if_.esp);
-
-  if (!success) {
-    // Free u_thread and remove from list
-    struct list_elem* removed = list_pop_back(&t->pcb->user_threads);
-    ASSERT(removed == &u_thread->elem);
-    free(u_thread);
-  } else {
-    u_thread->stack = pg_round_down(if_.esp);
-  }
-  args->success = success;
-  sema_up(&args->create_wait);
-
-  if (!success) {
-    pthread_exit();
-  }
-
-  /* Simulate a return from an interrupt to start user_thread running */
-  asm volatile("movl %0, %%esp; jmp intr_exit" : : "g"(&if_) : "memory");
-  NOT_REACHED();
-}
+static void start_pthread(void* exec_ UNUSED) {}
 
 /* Waits for thread with TID to die, if that thread was spawned
    in the same process and has not been waited on yet. Returns TID on
@@ -914,40 +759,7 @@ static void start_pthread(void* exec_ UNUSED) {
 
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. */
-tid_t pthread_join(tid_t tid UNUSED) {
-  lock_acquire(&thread_current()->pcb->pthread_lock);
-  // Check for self-join
-  if (tid == thread_current()->tid) {
-    lock_release(&thread_current()->pcb->pthread_lock);
-    return TID_ERROR;
-  }
-
-  struct list* user_threads = &thread_current()->pcb->user_threads;
-  struct user_thread* ut;
-  for (struct list_elem* e = list_begin(user_threads); e != list_end(user_threads);
-       e = list_next(e)) {
-    ut = list_entry(e, struct user_thread, elem);
-    if (ut->tid == tid) {
-      if (ut->exited && !ut->waited) {
-        lock_release(&thread_current()->pcb->pthread_lock);
-        return ut->tid;
-      } else if (!ut->waited) {
-        ut->waited = true;
-        lock_release(&thread_current()->pcb->pthread_lock);
-        sema_down(&ut->join_wait);
-        lock_acquire(&thread_current()->pcb->pthread_lock);
-        list_remove(&ut->elem);
-        free(ut);
-        lock_release(&thread_current()->pcb->pthread_lock);
-        return tid;
-      }
-      break;
-    }
-  }
-
-  lock_release(&thread_current()->pcb->pthread_lock);
-  return TID_ERROR;
-}
+tid_t pthread_join(tid_t tid UNUSED) { return -1; }
 
 /* Free the current thread's resources. Most resources will
    be freed on thread_exit(), so all we have to do is deallocate the
@@ -958,29 +770,7 @@ tid_t pthread_join(tid_t tid UNUSED) {
 
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. */
-void pthread_exit(void) {
-  struct thread* t = thread_current();
-  lock_acquire(&t->pcb->pthread_lock);
-
-  struct list* user_threads = &t->pcb->user_threads;
-  for (struct list_elem* e = list_begin(user_threads); e != list_end(user_threads);
-       e = list_next(e)) {
-    struct user_thread* ut = list_entry(e, struct user_thread, elem);
-    if (ut->tid == t->tid) {
-      ut->exited = true;
-      // Free user thread stack and free struct user_thread if waited if true?
-      uint8_t* kpage = pagedir_get_page(t->pcb->pagedir, ut->stack);
-      if (kpage != NULL) {
-        palloc_free_page(kpage);
-      }
-      pagedir_clear_page(t->pcb->pagedir, ut->stack);
-
-      sema_up(&ut->join_wait);
-      lock_release(&t->pcb->pthread_lock);
-      thread_exit();
-    }
-  }
-}
+void pthread_exit(void) {}
 
 /* Only to be used when the main thread explicitly calls pthread_exit.
    The main thread should wait on all threads in the process to
@@ -990,36 +780,4 @@ void pthread_exit(void) {
 
    This function will be implemented in Project 2: Multithreading. For
    now, it does nothing. */
-void pthread_exit_main(void) {
-  struct thread* t = thread_current();
-  lock_acquire(&t->pcb->pthread_lock);
-
-  struct list* user_threads = &t->pcb->user_threads;
-  // Main thread should be at front of list
-  struct list_elem* e = list_front(user_threads);
-  struct user_thread* ut_main = list_entry(e, struct user_thread, elem);
-  ut_main->exited = true;
-  sema_up(&ut_main->join_wait);
-
-  for (struct list_elem* e = list_begin(user_threads); e != list_end(user_threads);
-       e = list_next(e)) {
-    struct user_thread* ut = list_entry(e, struct user_thread, elem);
-    if (!ut->exited && !ut->waited) {
-      lock_release(&t->pcb->pthread_lock);
-      sema_down(&ut->join_wait);
-      lock_acquire(&t->pcb->pthread_lock);
-    }
-  }
-
-  /* Set and print exit status to 0, if not yet set. */
-  if (!t->pcb->exit_status->exited) {
-    t->pcb->exit_status->exited = true;
-    t->pcb->exit_status->status = 0;
-    printf("%s: exit(%d)\n", t->pcb->process_name, 0);
-  }
-
-  lock_release(&t->pcb->pthread_lock);
-
-  destroy_process();
-  thread_exit();
-}
+void pthread_exit_main(void) {}

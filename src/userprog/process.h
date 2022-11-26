@@ -36,27 +36,6 @@ struct exit_status {
   struct list_elem elem;      /* List element for PCB's child_exit_statuses */
 };
 
-struct user_lock {
-  struct lock kernel_lock;
-  struct list_elem elem;
-  char lockID;
-} user_lock;
-
-struct user_semaphore {
-  struct semaphore kernel_semaphore;
-  struct list_elem elem;
-  char semaID;
-} user_semaphore;
-
-struct user_thread {
-  tid_t tid;
-  uint8_t* stack;
-  struct list_elem elem;
-  struct semaphore join_wait;
-  bool exited;
-  bool waited;
-} user_thread;
-
 /* The process control block for a given process. Since
    there can be multiple threads per process, we need a separate
    PCB from the TCB. All TCBs in a process will have a pointer
@@ -72,18 +51,6 @@ struct process {
   struct list child_exit_statuses; /* List of children's exit statuses */
   user_file_list user_files;       /* List of open files */
   int num_opened_files;            /* Number of files previously opened */
-
-  /* User Threads fields*/
-  struct lock pthread_lock;
-  struct list user_threads;
-
-  // User synchronization primitive fields
-  struct list all_locks;
-  struct list all_semaphores;
-  struct lock sync_locks;
-  struct lock sync_semaphores;
-  unsigned char num_locks;
-  unsigned char num_semaphores;
 };
 
 void userprog_init(void);

@@ -11,7 +11,6 @@
 #include "devices/timer.h"
 #ifdef USERPROG
 #include "userprog/gdt.h"
-#include "userprog/process.h"
 #endif
 
 /* Programmable Interrupt Controller (PIC) registers.
@@ -355,18 +354,6 @@ void intr_handler(struct intr_frame* frame) {
 
     if (yield_on_return)
       thread_yield();
-  }
-
-  // Check if thread needs to be exited
-  if (is_trap_from_userspace(frame)) {
-    struct thread* cur = thread_current();
-    if (cur->pcb->exit_status->exited) {
-      if (is_main_thread(cur, cur->pcb)) {
-        pthread_exit_main();
-      } else {
-        pthread_exit();
-      }
-    }
   }
 }
 
