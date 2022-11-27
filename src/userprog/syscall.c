@@ -438,7 +438,7 @@ static void syscall_handler(struct intr_frame* f) {
   const uint32_t* args = ((uint32_t*)f->esp);
 
   /* Check syscall number is in user memory */
-  if (!are_valid_args(args, 1) || args[0] >= 32) {
+  if (!are_valid_args(args, 1) || args[0] >= sizeof(syscall_table) / sizeof(struct syscall_info)) {
     process_exit(-1);
   }
 
