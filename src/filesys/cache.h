@@ -15,4 +15,7 @@ void cache_release_buffer(void*, bool validated, bool dirtied);
 void cache_reset(void);
 void cache_flush(void);
 
+unsigned long long cache_req_cnt(void);
+unsigned long long cache_hit_cnt(void);
+
 #endif /* filesys/cache.h */

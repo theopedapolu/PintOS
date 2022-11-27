@@ -12,18 +12,24 @@
 /* Entry in the cache with both metadata and data contained
    in the corresponding block. */
 struct cache_entry {
-  block_sector_t sector;           /* Cache tag. */
-  bool valid;                      /* True if data valid. */
-  bool dirty;                      /* True if data should be written back on eviction. */
-  uint64_t last_accessed;          /* Ticks of last access. */
-  int num_accessing;               /* Number of threads trying to access. Do not evict if >0. */
-  struct condition valid_wait;     /* Wait for valid data. Used with cache_lock. */
-  struct lock data_lock;           /* Lock on data. */
-  uint8_t data[BLOCK_SECTOR_SIZE]; /* Data on disk. */
+  block_sector_t sector;            /* Cache tag. */
+  bool valid;                       /* True if data valid. */
+  bool dirty;                       /* True if data should be written back on eviction. */
+  unsigned long long last_accessed; /* Value of req_cnt at time of last access. */
+  int num_accessing;                /* Number of threads trying to access. Do not evict if >0. */
+  struct condition valid_wait;      /* Wait for valid data. Used with cache_lock. */
+  struct lock data_lock;            /* Lock on data. */
+  uint8_t data[BLOCK_SECTOR_SIZE];  /* Data on disk. */
 };
 
 /* Buffer cache entries. */
 struct cache_entry buffer_cache[CACHE_SIZE];
+
+/* Number of requests to the cache. */
+unsigned long long req_cnt;
+
+/* Number of cache hits. */
+unsigned long long hit_cnt;
 
 /* Global lock on buffer_cache metadata. */
 struct lock cache_lock;
@@ -39,6 +45,8 @@ void cache_init(void) {
     cond_init(&buffer_cache[i].valid_wait);
     lock_init(&buffer_cache[i].data_lock);
   }
+  req_cnt = 0;
+  hit_cnt = 0;
   lock_init(&cache_lock);
 }
 
@@ -70,13 +78,17 @@ static struct cache_entry* cache_get_entry(block_sector_t sector, bool read_on_m
 
   ASSERT(entry != NULL);
 
-  /* On miss, while holding cache_lock, invalidate the entry */
+  /* On miss, while holding cache_lock, invalidate the entry.
+     On hit, increment hit_cnt. */
   block_sector_t old_sector = entry->sector;
   if (old_sector != sector) {
     entry->sector = sector;
     entry->valid = false;
     entry->num_accessing += 1;
+  } else {
+    hit_cnt += 1;
   }
+  req_cnt += 1;
 
   ASSERT(entry->num_accessing >= 1);
 
@@ -122,7 +134,7 @@ static void cache_release_entry(struct cache_entry* entry, bool validated, bool 
   if (!entry->dirty && dirtied) {
     entry->dirty = true;
   }
-  entry->last_accessed = timer_ticks();
+  entry->last_accessed = req_cnt;
   entry->num_accessing -= 1;
 
   lock_release(&cache_lock);
@@ -194,6 +206,9 @@ void cache_reset(void) {
     buffer_cache[i].num_accessing = 0;
   }
 
+  req_cnt = 0;
+  hit_cnt = 0;
+
   /* Release all locks */
   for (int i = 0; i < CACHE_SIZE; i++) {
     lock_release(&buffer_cache[i].data_lock);
@@ -228,4 +243,20 @@ void cache_flush(void) {
     buffer_cache[i].num_accessing -= 1;
     lock_release(&cache_lock);
   }
+}
+
+/* Returns the number of request to the cache since the last reset. */
+unsigned long long cache_req_cnt(void) {
+  lock_acquire(&cache_lock);
+  unsigned long long req_cnt_ = req_cnt;
+  lock_release(&cache_lock);
+  return req_cnt_;
+}
+
+/* Returns the number of cache hits since the last reset. */
+unsigned long long cache_hit_cnt(void) {
+  lock_acquire(&cache_lock);
+  unsigned long long hit_cnt_ = hit_cnt;
+  lock_release(&cache_lock);
+  return hit_cnt_;
 }
