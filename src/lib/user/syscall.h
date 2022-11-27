@@ -64,5 +64,7 @@ int inumber(int fd);
 void buffer_cache_reset(void);
 int buffer_cache_requests(void);
 int buffer_cache_hits(void);
+int filesys_reads(void);
+int filesys_writes(void);
 
 #endif /* lib/user/syscall.h */

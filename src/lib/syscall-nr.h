@@ -43,6 +43,8 @@ enum {
   SYS_BC_RESET, /* Resets the buffer cache. */
   SYS_BC_REQS,  /* Returns number of requests to the buffer cache since last reset. */
   SYS_BC_HITS,  /* Returns number of buffer cache hits since last reset. */
+  SYS_FS_READS, /* Returns number of reads to the block device that contains the file system. */
+  SYS_FS_WRITES, /* Returns the number of writes to the block device that contains the file system. */
 
   SYS_CNT, /* Number of syscalls. */
 };

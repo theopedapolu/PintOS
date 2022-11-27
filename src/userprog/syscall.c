@@ -3,6 +3,7 @@
 #include <string.h>
 #include <syscall-nr.h>
 #include <kernel/stdio.h>
+#include "devices/block.h"
 #include "devices/input.h"
 #include "devices/shutdown.h"
 #include "filesys/cache.h"
@@ -119,6 +120,8 @@ syscall_handler_func syscall_inumber_handler;
 syscall_handler_func syscall_buffer_cache_reset_handler;
 syscall_handler_func syscall_buffer_cache_requests_handler;
 syscall_handler_func syscall_buffer_cache_hits_handler;
+syscall_handler_func syscall_filesys_reads_handler;
+syscall_handler_func syscall_filesys_writes_handler;
 
 /* Array mapping each syscall (noted by its index) to
    the number of arguments it has and the function handler 
@@ -159,6 +162,8 @@ struct syscall_info syscall_table[] = {
     {0, syscall_buffer_cache_reset_handler},
     {0, syscall_buffer_cache_requests_handler},
     {0, syscall_buffer_cache_hits_handler},
+    {0, syscall_filesys_reads_handler},
+    {0, syscall_filesys_writes_handler},
 };
 
 void syscall_halt_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) { shutdown_power_off(); }
@@ -429,6 +434,16 @@ void syscall_buffer_cache_requests_handler(uint32_t* eax, uint32_t* args UNUSED)
 void syscall_buffer_cache_hits_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {
   int hit_cnt = (int)cache_hit_cnt();
   *eax = hit_cnt;
+}
+
+void syscall_filesys_reads_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {
+  int read_cnt = (int)block_read_cnt(fs_device);
+  *eax = read_cnt;
+}
+
+void syscall_filesys_writes_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {
+  int write_cnt = (int)block_write_cnt(fs_device);
+  *eax = write_cnt;
 }
 
 /* Handles syscalls right after they're called. First checks
