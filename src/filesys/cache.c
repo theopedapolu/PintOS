@@ -32,6 +32,7 @@ struct lock cache_lock;
 void cache_init(void) {
   for (int i = 0; i < CACHE_SIZE; i++) {
     buffer_cache[i].sector = -1;
+    buffer_cache[i].valid = false;
     buffer_cache[i].dirty = false;
     buffer_cache[i].last_accessed = 0;
     buffer_cache[i].num_accessing = 0;
@@ -170,6 +171,34 @@ void cache_release_buffer(void* buffer, bool validated, bool dirtied) {
       (struct cache_entry*)((uint8_t*)buffer - offsetof(struct cache_entry, data));
   lock_release(&entry->data_lock);
   cache_release_entry(entry, validated, dirtied);
+}
+
+/* Resets the buffer cache. */
+void cache_reset(void) {
+  /* Acquire all locks */
+  lock_acquire(&cache_lock);
+  for (int i = 0; i < CACHE_SIZE; i++) {
+    lock_acquire(&buffer_cache[i].data_lock);
+  }
+
+  for (int i = 0; i < CACHE_SIZE; i++) {
+    /* Flush if valid and dirty */
+    if (buffer_cache[i].valid && buffer_cache[i].dirty) {
+      block_write(fs_device, buffer_cache[i].sector, buffer_cache[i].data);
+    }
+
+    buffer_cache[i].sector = -1;
+    buffer_cache[i].valid = false;
+    buffer_cache[i].dirty = false;
+    buffer_cache[i].last_accessed = 0;
+    buffer_cache[i].num_accessing = 0;
+  }
+
+  /* Release all locks */
+  for (int i = 0; i < CACHE_SIZE; i++) {
+    lock_release(&buffer_cache[i].data_lock);
+  }
+  lock_release(&cache_lock);
 }
 
 /* Flushes all blocks in the cache to disk.
