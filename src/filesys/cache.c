@@ -164,4 +164,29 @@ void cache_release_buffer(void* buffer) {
 
 /* Flushes all blocks in the cache to disk.
    Called in function filesys_done in filesys/filesys.c. */
-void cache_flush(void) { return; }
+void cache_flush(void) {
+  for (int i = 0; i < CACHE_SIZE; i++) {
+    block_sector_t sector;
+
+    lock_acquire(&cache_lock);
+    /* Flush only if both valid and dirty */
+    bool flush_required = buffer_cache[i].valid && buffer_cache[i].dirty;
+    if (flush_required) {
+      sector = buffer_cache[i].sector;
+      buffer_cache[i].num_accessing += 1;
+    }
+    lock_release(&cache_lock);
+
+    if (!flush_required) {
+      continue;
+    }
+
+    lock_acquire(&buffer_cache[i].data_lock);
+    block_write(fs_device, sector, buffer_cache[i].data);
+    lock_release(&buffer_cache[i].data_lock);
+
+    lock_acquire(&cache_lock);
+    buffer_cache[i].num_accessing -= 1;
+    lock_release(&cache_lock);
+  }
+}
