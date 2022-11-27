@@ -1,5 +1,6 @@
 #include "filesys/cache.h"
 #include <debug.h>
+#include <stddef.h>
 #include <string.h>
 #include "devices/timer.h"
 #include "filesys/filesys.h"
@@ -142,12 +143,24 @@ void cache_write(block_sector_t sector, void* buffer) {
 }
 
 /* Returns the data buffer in the cache entry corresponding
-   to SECTOR. Can be called only by one thread at a time. */
-void* cache_get_buffer(block_sector_t sector UNUSED) { return NULL; }
+   to SECTOR. Allows a thread to perform a set of synchronized
+   reads or writes to SECTOR. Can be called only by one thread
+   at a time and should be paired with a call to
+   cache_release_buffer. */
+void* cache_get_buffer(block_sector_t sector) {
+  struct cache_entry* entry = cache_get_entry(sector, true);
+  lock_acquire(&entry->data_lock);
+  return entry->data;
+}
 
 /* Releases BUFFER returned by cache_get_buffer to be used
    by another thread. */
-void cache_release_buffer(void* buffer UNUSED) { return; }
+void cache_release_buffer(void* buffer) {
+  struct cache_entry* entry =
+      (struct cache_entry*)((uint8_t*)buffer - offsetof(struct cache_entry, data));
+  lock_release(&entry->data_lock);
+  cache_release_entry(entry, true, true);
+}
 
 /* Flushes all blocks in the cache to disk.
    Called in function filesys_done in filesys/filesys.c. */
