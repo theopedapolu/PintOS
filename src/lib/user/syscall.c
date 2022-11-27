@@ -158,3 +158,12 @@ void sema_up(sema_t* sema) {
 }
 
 tid_t get_tid(void) { return syscall0(SYS_GET_TID); }
+
+void buffer_cache_reset(void) {
+  syscall0(SYS_BC_RESET);
+  NOT_REACHED();
+}
+
+int buffer_cache_requests(void) { return syscall0(SYS_BC_REQS); }
+
+int buffer_cache_hits(void) { return syscall0(SYS_BC_HITS); }

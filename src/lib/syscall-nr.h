@@ -35,11 +35,14 @@ enum {
   SYS_MUNMAP, /* Remove a memory mapping. */
 
   /* Project 4 only. */
-  SYS_CHDIR,   /* Change the current directory. */
-  SYS_MKDIR,   /* Create a directory. */
-  SYS_READDIR, /* Reads a directory entry. */
-  SYS_ISDIR,   /* Tests if a fd represents a directory. */
-  SYS_INUMBER  /* Returns the inode number for a fd. */
+  SYS_CHDIR,    /* Change the current directory. */
+  SYS_MKDIR,    /* Create a directory. */
+  SYS_READDIR,  /* Reads a directory entry. */
+  SYS_ISDIR,    /* Tests if a fd represents a directory. */
+  SYS_INUMBER,  /* Returns the inode number for a fd. */
+  SYS_BC_RESET, /* Resets the buffer cache. */
+  SYS_BC_REQS,  /* Returns number of requests to the buffer cache since last reset. */
+  SYS_BC_HITS,  /* Returns number of buffer cache hits since last reset. */
 };
 
 #endif /* lib/syscall-nr.h */
