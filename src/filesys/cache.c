@@ -31,6 +31,7 @@ struct lock cache_lock;
 /* Initializes the buffer cache module. */
 void cache_init(void) {
   for (int i = 0; i < CACHE_SIZE; i++) {
+    buffer_cache[i].sector = -1;
     buffer_cache[i].dirty = false;
     buffer_cache[i].last_accessed = 0;
     buffer_cache[i].num_accessing = 0;
@@ -65,6 +66,8 @@ static struct cache_entry* cache_get_entry(block_sector_t sector, bool read_on_m
       entry = &buffer_cache[i];
     }
   }
+
+  ASSERT(entry != NULL);
 
   /* On miss, while holding cache_lock, invalidate the entry */
   block_sector_t old_sector = entry->sector;
@@ -105,17 +108,19 @@ static struct cache_entry* cache_get_entry(block_sector_t sector, bool read_on_m
 }
 
 /* Releases ENTRY to be used by another thread.
-   Set VALID to true if the data in ENTRY is valid
-   and set DIRTY to true if this entry was written to. */
-static void cache_release_entry(struct cache_entry* entry, bool valid, bool dirty) {
+   Set VALIDATED to true if the data in ENTRY was made valid
+   and set DIRTIED to true if this entry was written to. */
+static void cache_release_entry(struct cache_entry* entry, bool validated, bool dirtied) {
   lock_acquire(&cache_lock);
   ASSERT(entry->num_accessing >= 1);
 
-  if (!entry->valid && valid) {
+  if (!entry->valid && validated) {
+    entry->valid = true;
     cond_broadcast(&entry->valid_wait, &cache_lock);
   }
-  entry->valid = valid;
-  entry->dirty = dirty;
+  if (!entry->dirty && dirtied) {
+    entry->dirty = true;
+  }
   entry->last_accessed = timer_ticks();
   entry->num_accessing -= 1;
 
@@ -134,7 +139,7 @@ void cache_read(block_sector_t sector, void* buffer) {
 
 /* Writes BUFFER into SECTOR via the cache.
    BUFFER should have size BLOCK_SECTOR_SIZE. */
-void cache_write(block_sector_t sector, void* buffer) {
+void cache_write(block_sector_t sector, const void* buffer) {
   struct cache_entry* entry = cache_get_entry(sector, false);
   lock_acquire(&entry->data_lock);
   memcpy(entry->data, buffer, BLOCK_SECTOR_SIZE);
@@ -142,24 +147,29 @@ void cache_write(block_sector_t sector, void* buffer) {
   cache_release_entry(entry, true, true);
 }
 
-/* Returns the data buffer in the cache entry corresponding
-   to SECTOR. Allows a thread to perform a set of synchronized
-   reads or writes to SECTOR. Can be called only by one thread
-   at a time and should be paired with a call to
-   cache_release_buffer. */
-void* cache_get_buffer(block_sector_t sector) {
-  struct cache_entry* entry = cache_get_entry(sector, true);
+/* Returns the data buffer in the cache entry corresponding to
+   SECTOR. Set READ_ON_MISS to true if the data in SECTOR should be
+   read into the buffer on a cache miss (i.e., READ_ON_MISS can be
+   false on a blind write).
+   
+   Allows a thread to perform a set of synchronized reads or writes
+   to SECTOR. Can be called only by one thread at a time and should
+   be paired with a call to cache_release_buffer. */
+void* cache_get_buffer(block_sector_t sector, bool read_on_miss) {
+  struct cache_entry* entry = cache_get_entry(sector, read_on_miss);
   lock_acquire(&entry->data_lock);
   return entry->data;
 }
 
-/* Releases BUFFER returned by cache_get_buffer to be used
-   by another thread. */
-void cache_release_buffer(void* buffer) {
+/* Releases BUFFER returned by cache_get_buffer to be used by another
+   thread. Set VALIDATED to true if the data in BUFFER was made valid
+   since the call to cache_get_buffer and set DIRTIED to true if the
+   data in BUFFER was modified since the call to cache_get_buffer. */
+void cache_release_buffer(void* buffer, bool validated, bool dirtied) {
   struct cache_entry* entry =
       (struct cache_entry*)((uint8_t*)buffer - offsetof(struct cache_entry, data));
   lock_release(&entry->data_lock);
-  cache_release_entry(entry, true, true);
+  cache_release_entry(entry, validated, dirtied);
 }
 
 /* Flushes all blocks in the cache to disk.
