@@ -1,5 +1,6 @@
 #include "filesys/cache.h"
 #include <debug.h>
+#include <string.h>
 #include "devices/timer.h"
 #include "filesys/filesys.h"
 #include "threads/synch.h"
@@ -120,11 +121,25 @@ static void cache_release_entry(struct cache_entry* entry, bool valid, bool dirt
   lock_release(&cache_lock);
 }
 
-/* Reads the contents of SECTOR into BUFFER via the cache. */
-void cache_read(block_sector_t sector UNUSED, void* buffer UNUSED) { return; }
+/* Reads the contents of SECTOR into BUFFER via the cache.
+   BUFFER should have size BLOCK_SECTOR_SIZE. */
+void cache_read(block_sector_t sector, void* buffer) {
+  struct cache_entry* entry = cache_get_entry(sector, true);
+  lock_acquire(&entry->data_lock);
+  memcpy(buffer, entry->data, BLOCK_SECTOR_SIZE);
+  lock_release(&entry->data_lock);
+  cache_release_entry(entry, true, false);
+}
 
-/* Writes BUFFER into SECTOR via the cache. */
-void cache_write(block_sector_t sector UNUSED, void* buffer UNUSED) { return; }
+/* Writes BUFFER into SECTOR via the cache.
+   BUFFER should have size BLOCK_SECTOR_SIZE. */
+void cache_write(block_sector_t sector, void* buffer) {
+  struct cache_entry* entry = cache_get_entry(sector, false);
+  lock_acquire(&entry->data_lock);
+  memcpy(entry->data, buffer, BLOCK_SECTOR_SIZE);
+  lock_release(&entry->data_lock);
+  cache_release_entry(entry, true, true);
+}
 
 /* Returns the data buffer in the cache entry corresponding
    to SECTOR. Can be called only by one thread at a time. */
