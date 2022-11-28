@@ -23,16 +23,16 @@ struct cache_entry {
 };
 
 /* Buffer cache entries. */
-struct cache_entry buffer_cache[CACHE_SIZE];
+static struct cache_entry buffer_cache[CACHE_SIZE];
 
 /* Number of requests to the cache. */
-unsigned long long req_cnt;
+static unsigned long long req_cnt;
 
 /* Number of cache hits. */
-unsigned long long hit_cnt;
+static unsigned long long hit_cnt;
 
 /* Global lock on buffer_cache metadata. */
-struct lock cache_lock;
+static struct lock cache_lock;
 
 /* Initializes the buffer cache module. */
 void cache_init(void) {
