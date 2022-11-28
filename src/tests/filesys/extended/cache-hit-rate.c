@@ -30,14 +30,14 @@ void test_main(void) {
   CHECK(read(fd, buf, TEST_SIZE) == TEST_SIZE, "read \"%s\"", file_name);
   msg("close \"%s\"", file_name);
   close(fd);
-  cold_hit_rate = (double)buffer_cache_hits() / (double)buffer_cache_requests();
+  cold_hit_rate = buffer_cache_hit_rate();
 
   /* Get hit rate on reread */
   CHECK((fd = open(file_name)) > 1, "open \"%s\"", file_name);
   CHECK(read(fd, buf, TEST_SIZE) == TEST_SIZE, "read \"%s\"", file_name);
   msg("close \"%s\"", file_name);
   close(fd);
-  re_hit_rate = (double)buffer_cache_hits() / (double)buffer_cache_requests();
+  re_hit_rate = buffer_cache_hit_rate();
 
   /* Compare hit rates */
   if (re_hit_rate > cold_hit_rate) {

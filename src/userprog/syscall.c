@@ -118,9 +118,7 @@ syscall_handler_func syscall_readdir_handler;
 syscall_handler_func syscall_isdir_handler;
 syscall_handler_func syscall_inumber_handler;
 syscall_handler_func syscall_buffer_cache_reset_handler;
-syscall_handler_func syscall_buffer_cache_requests_handler;
-syscall_handler_func syscall_buffer_cache_hits_handler;
-syscall_handler_func syscall_filesys_reads_handler;
+syscall_handler_func syscall_buffer_cache_hit_rate_handler;
 syscall_handler_func syscall_filesys_writes_handler;
 
 /* Array mapping each syscall (noted by its index) to
@@ -160,9 +158,7 @@ struct syscall_info syscall_table[] = {
     {1, syscall_isdir_handler},
     {1, syscall_inumber_handler},
     {0, syscall_buffer_cache_reset_handler},
-    {0, syscall_buffer_cache_requests_handler},
-    {0, syscall_buffer_cache_hits_handler},
-    {0, syscall_filesys_reads_handler},
+    {0, syscall_buffer_cache_hit_rate_handler},
     {0, syscall_filesys_writes_handler},
 };
 
@@ -426,22 +422,15 @@ void syscall_buffer_cache_reset_handler(uint32_t* eax UNUSED, uint32_t* args UNU
   cache_reset();
 }
 
-void syscall_buffer_cache_requests_handler(uint32_t* eax, uint32_t* args UNUSED) {
-  int req_cnt = (int)cache_req_cnt();
-  *eax = req_cnt;
+void syscall_buffer_cache_hit_rate_handler(uint32_t* eax, uint32_t* args UNUSED) {
+  union {
+    float f;
+    uint32_t i;
+  } hit_rate = {.f = (float)cache_hit_cnt() / (float)cache_req_cnt()};
+  *eax = hit_rate.i;
 }
 
-void syscall_buffer_cache_hits_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {
-  int hit_cnt = (int)cache_hit_cnt();
-  *eax = hit_cnt;
-}
-
-void syscall_filesys_reads_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {
-  int read_cnt = (int)block_read_cnt(fs_device);
-  *eax = read_cnt;
-}
-
-void syscall_filesys_writes_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {
+void syscall_filesys_writes_handler(uint32_t* eax, uint32_t* args UNUSED) {
   int write_cnt = (int)block_write_cnt(fs_device);
   *eax = write_cnt;
 }
@@ -453,7 +442,7 @@ static void syscall_handler(struct intr_frame* f) {
   const uint32_t* args = ((uint32_t*)f->esp);
 
   /* Check syscall number is in user memory */
-  if (!are_valid_args(args, 1) || args[0] >= SYS_CNT) {
+  if (!are_valid_args(args, 1) || args[0] >= sizeof(syscall_table) / sizeof(struct syscall_info)) {
     process_exit(-1);
   }
 
