@@ -3,8 +3,10 @@
 #include <string.h>
 #include <syscall-nr.h>
 #include <kernel/stdio.h>
+#include "devices/block.h"
 #include "devices/input.h"
 #include "devices/shutdown.h"
+#include "filesys/cache.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 #include "threads/interrupt.h"
@@ -60,14 +62,14 @@ static bool is_valid_string(const char* str) {
    of arguments for a given syscall as defined in lib/user/syscall.c.
    For example, for the read syscall, args[0] = fd, args[1] = buffer,
    args[2] = size. */
-typedef void syscall_handler_func_t(uint32_t* eax, uint32_t* args);
+typedef void syscall_handler_func(uint32_t* eax, uint32_t* args);
 
 /* Type declaration for grouping a syscall handler with the
    number of args it has. This is stored in an array below
    where the index of the array is the respective syscall. */
 struct syscall_info {
   int num_args;
-  syscall_handler_func_t* handler;
+  syscall_handler_func* handler;
 };
 
 /* Function declaration for the generic syscall handler.
@@ -83,59 +85,81 @@ void syscall_init(void) {
    handlers that will need to be implemented below.
    NOTE: If args includes a pointer to something, the pointer
    must be checked for valid memory in the specific function. */
-syscall_handler_func_t syscall_halt_handler;
-syscall_handler_func_t syscall_exit_handler;
-syscall_handler_func_t syscall_exec_handler;
-syscall_handler_func_t syscall_wait_handler;
-syscall_handler_func_t syscall_create_handler;
-syscall_handler_func_t syscall_remove_handler;
-syscall_handler_func_t syscall_open_handler;
-syscall_handler_func_t syscall_filesize_handler;
-syscall_handler_func_t syscall_read_handler;
-syscall_handler_func_t syscall_write_handler;
-syscall_handler_func_t syscall_seek_handler;
-syscall_handler_func_t syscall_tell_handler;
-syscall_handler_func_t syscall_close_handler;
-syscall_handler_func_t syscall_practice_handler;
-syscall_handler_func_t syscall_compute_e_handler;
-syscall_handler_func_t syscall_pt_create_handler;
-syscall_handler_func_t syscall_pt_exit_handler;
-syscall_handler_func_t syscall_pt_join_handler;
-syscall_handler_func_t syscall_lock_init_handler;
-syscall_handler_func_t syscall_lock_acquire_handler;
-syscall_handler_func_t syscall_lock_release_handler;
-syscall_handler_func_t syscall_sema_init_handler;
-syscall_handler_func_t syscall_sema_down_handler;
-syscall_handler_func_t syscall_sema_up_handler;
-syscall_handler_func_t syscall_get_tid_handler;
-syscall_handler_func_t syscall_nmap_handler;
-syscall_handler_func_t syscall_munmap_handler;
-syscall_handler_func_t syscall_chdir_handler;
-syscall_handler_func_t syscall_mkdir_handler;
-syscall_handler_func_t syscall_readdir_handler;
-syscall_handler_func_t syscall_isdir_handler;
-syscall_handler_func_t syscall_inumber_handler;
+syscall_handler_func syscall_halt_handler;
+syscall_handler_func syscall_exit_handler;
+syscall_handler_func syscall_exec_handler;
+syscall_handler_func syscall_wait_handler;
+syscall_handler_func syscall_create_handler;
+syscall_handler_func syscall_remove_handler;
+syscall_handler_func syscall_open_handler;
+syscall_handler_func syscall_filesize_handler;
+syscall_handler_func syscall_read_handler;
+syscall_handler_func syscall_write_handler;
+syscall_handler_func syscall_seek_handler;
+syscall_handler_func syscall_tell_handler;
+syscall_handler_func syscall_close_handler;
+syscall_handler_func syscall_practice_handler;
+syscall_handler_func syscall_compute_e_handler;
+syscall_handler_func syscall_pt_create_handler;
+syscall_handler_func syscall_pt_exit_handler;
+syscall_handler_func syscall_pt_join_handler;
+syscall_handler_func syscall_lock_init_handler;
+syscall_handler_func syscall_lock_acquire_handler;
+syscall_handler_func syscall_lock_release_handler;
+syscall_handler_func syscall_sema_init_handler;
+syscall_handler_func syscall_sema_down_handler;
+syscall_handler_func syscall_sema_up_handler;
+syscall_handler_func syscall_get_tid_handler;
+syscall_handler_func syscall_nmap_handler;
+syscall_handler_func syscall_munmap_handler;
+syscall_handler_func syscall_chdir_handler;
+syscall_handler_func syscall_mkdir_handler;
+syscall_handler_func syscall_readdir_handler;
+syscall_handler_func syscall_isdir_handler;
+syscall_handler_func syscall_inumber_handler;
+syscall_handler_func syscall_buffer_cache_reset_handler;
+syscall_handler_func syscall_buffer_cache_hit_rate_handler;
+syscall_handler_func syscall_filesys_writes_handler;
 
 /* Array mapping each syscall (noted by its index) to
    the number of arguments it has and the function handler 
    assigned to deal with it. */
 struct syscall_info syscall_table[] = {
-    {0, syscall_halt_handler},         {1, syscall_exit_handler},
-    {1, syscall_exec_handler},         {1, syscall_wait_handler},
-    {2, syscall_create_handler},       {1, syscall_remove_handler},
-    {1, syscall_open_handler},         {1, syscall_filesize_handler},
-    {3, syscall_read_handler},         {3, syscall_write_handler},
-    {2, syscall_seek_handler},         {1, syscall_tell_handler},
-    {1, syscall_close_handler},        {1, syscall_practice_handler},
-    {1, syscall_compute_e_handler},    {3, syscall_pt_create_handler},
-    {0, syscall_pt_exit_handler},      {1, syscall_pt_join_handler},
-    {1, syscall_lock_init_handler},    {1, syscall_lock_acquire_handler},
-    {1, syscall_lock_release_handler}, {2, syscall_sema_init_handler},
-    {1, syscall_sema_down_handler},    {1, syscall_sema_up_handler},
-    {0, syscall_get_tid_handler},      {2, syscall_nmap_handler},
-    {1, syscall_munmap_handler},       {1, syscall_chdir_handler},
-    {1, syscall_mkdir_handler},        {2, syscall_readdir_handler},
-    {1, syscall_isdir_handler},        {1, syscall_inumber_handler},
+    {0, syscall_halt_handler},
+    {1, syscall_exit_handler},
+    {1, syscall_exec_handler},
+    {1, syscall_wait_handler},
+    {2, syscall_create_handler},
+    {1, syscall_remove_handler},
+    {1, syscall_open_handler},
+    {1, syscall_filesize_handler},
+    {3, syscall_read_handler},
+    {3, syscall_write_handler},
+    {2, syscall_seek_handler},
+    {1, syscall_tell_handler},
+    {1, syscall_close_handler},
+    {1, syscall_practice_handler},
+    {1, syscall_compute_e_handler},
+    {3, syscall_pt_create_handler},
+    {0, syscall_pt_exit_handler},
+    {1, syscall_pt_join_handler},
+    {1, syscall_lock_init_handler},
+    {1, syscall_lock_acquire_handler},
+    {1, syscall_lock_release_handler},
+    {2, syscall_sema_init_handler},
+    {1, syscall_sema_down_handler},
+    {1, syscall_sema_up_handler},
+    {0, syscall_get_tid_handler},
+    {2, syscall_nmap_handler},
+    {1, syscall_munmap_handler},
+    {1, syscall_chdir_handler},
+    {1, syscall_mkdir_handler},
+    {2, syscall_readdir_handler},
+    {1, syscall_isdir_handler},
+    {1, syscall_inumber_handler},
+    {0, syscall_buffer_cache_reset_handler},
+    {0, syscall_buffer_cache_hit_rate_handler},
+    {0, syscall_filesys_writes_handler},
 };
 
 void syscall_halt_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) { shutdown_power_off(); }
@@ -394,6 +418,23 @@ void syscall_isdir_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
 void syscall_inumber_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
+void syscall_buffer_cache_reset_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {
+  cache_reset();
+}
+
+void syscall_buffer_cache_hit_rate_handler(uint32_t* eax, uint32_t* args UNUSED) {
+  union {
+    float f;
+    uint32_t i;
+  } hit_rate = {.f = (float)cache_hit_cnt() / (float)cache_req_cnt()};
+  *eax = hit_rate.i;
+}
+
+void syscall_filesys_writes_handler(uint32_t* eax, uint32_t* args UNUSED) {
+  int write_cnt = (int)block_write_cnt(fs_device);
+  *eax = write_cnt;
+}
+
 /* Handles syscalls right after they're called. First checks
    if the syscall identifier is valid memory, then checks if
    it is a valid syscall, then if the arguments are valid. */
@@ -401,7 +442,7 @@ static void syscall_handler(struct intr_frame* f) {
   const uint32_t* args = ((uint32_t*)f->esp);
 
   /* Check syscall number is in user memory */
-  if (!are_valid_args(args, 1) || args[0] >= 32) {
+  if (!are_valid_args(args, 1) || args[0] >= sizeof(syscall_table) / sizeof(struct syscall_info)) {
     process_exit(-1);
   }
 

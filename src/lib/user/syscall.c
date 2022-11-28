@@ -158,3 +158,15 @@ void sema_up(sema_t* sema) {
 }
 
 tid_t get_tid(void) { return syscall0(SYS_GET_TID); }
+
+void buffer_cache_reset(void) { syscall0(SYS_BC_RESET); }
+
+float buffer_cache_hit_rate(void) {
+  union {
+    float f;
+    int i;
+  } hit_rate = {.i = syscall0(SYS_BC_HIT_RATE)};
+  return hit_rate.f;
+}
+
+int filesys_writes(void) { return syscall0(SYS_FS_WRITES); }

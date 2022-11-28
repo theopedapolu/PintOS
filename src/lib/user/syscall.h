@@ -61,5 +61,8 @@ bool mkdir(const char* dir);
 bool readdir(int fd, char name[READDIR_MAX_LEN + 1]);
 bool isdir(int fd);
 int inumber(int fd);
+void buffer_cache_reset(void);
+float buffer_cache_hit_rate(void);
+int filesys_writes(void);
 
 #endif /* lib/user/syscall.h */

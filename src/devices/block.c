@@ -134,6 +134,12 @@ void block_print_stats(void) {
   }
 }
 
+/* Returns the read count of BLOCK. */
+unsigned long long block_read_cnt(struct block* block) { return block->read_cnt; }
+
+/* Returns the write count of BLOCK. */
+unsigned long long block_write_cnt(struct block* block) { return block->write_cnt; }
+
 /* Registers a new block device with the given NAME.  If
    EXTRA_INFO is non-null, it is printed as part of a user
    message.  The block device's SIZE in sectors and its TYPE must
