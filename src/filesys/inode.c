@@ -10,7 +10,7 @@
 #include "threads/synch.h"
 
 /* Number of direct pointers in an inode. */
-#define NUM_DIRECT_POINTERS 123
+#define NUM_DIRECT_POINTERS 124
 
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
@@ -22,7 +22,6 @@ struct inode_disk {
   block_sector_t indirect;                    /* Indirect pointer. */
   block_sector_t doubly_indirect;             /* Doubly indirect pointer. */
   off_t length;                               /* File size in bytes. */
-  bool is_dir;                                /* True if represents a directory. */
   unsigned magic;                             /* Magic number. */
 };
 
