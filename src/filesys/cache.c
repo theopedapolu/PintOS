@@ -37,7 +37,7 @@ static struct lock cache_lock;
 /* Initializes the buffer cache module. */
 void cache_init(void) {
   for (int i = 0; i < CACHE_SIZE; i++) {
-    buffer_cache[i].sector = -1;
+    buffer_cache[i].sector = 0;
     buffer_cache[i].valid = false;
     buffer_cache[i].dirty = false;
     buffer_cache[i].last_accessed = 0;
@@ -57,13 +57,15 @@ void cache_init(void) {
    to false on a blind write). */
 static struct cache_entry* cache_get_entry(block_sector_t sector, bool read_on_miss) {
   struct cache_entry* entry = NULL;
+  bool hit;
   lock_acquire(&cache_lock);
 
   for (int i = 0; i < CACHE_SIZE; i++) {
     /* Cache hit */
     if (buffer_cache[i].sector == sector) {
       buffer_cache[i].num_accessing += 1;
-      if (!buffer_cache[i].valid) {
+      /* Wait for valid data if invalid and accessed by another thread */
+      if (!buffer_cache[i].valid && buffer_cache[i].num_accessing > 1) {
         cond_wait(&buffer_cache[i].valid_wait, &cache_lock);
       }
       entry = &buffer_cache[i];
@@ -127,9 +129,15 @@ static void cache_release_entry(struct cache_entry* entry, bool validated, bool 
   lock_acquire(&cache_lock);
   ASSERT(entry->num_accessing >= 1);
 
-  if (!entry->valid && validated) {
-    entry->valid = true;
-    cond_broadcast(&entry->valid_wait, &cache_lock);
+  /* If invalid, wake waiters if validated or if there are other
+     threads waiting */
+  if (!entry->valid) {
+    if (validated) {
+      entry->valid = true;
+      cond_broadcast(&entry->valid_wait, &cache_lock);
+    } else if (entry->num_accessing > 1) {
+      cond_broadcast(&entry->valid_wait, &cache_lock);
+    }
   }
   if (!entry->dirty && dirtied) {
     entry->dirty = true;
@@ -199,7 +207,7 @@ void cache_reset(void) {
       block_write(fs_device, buffer_cache[i].sector, buffer_cache[i].data);
     }
 
-    buffer_cache[i].sector = -1;
+    buffer_cache[i].sector = 0;
     buffer_cache[i].valid = false;
     buffer_cache[i].dirty = false;
     buffer_cache[i].last_accessed = 0;
