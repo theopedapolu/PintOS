@@ -233,7 +233,11 @@ void syscall_open_handler(uint32_t* eax, uint32_t* args) {
 
   struct process* pcb = thread_current()->pcb;
 
-  int result = user_file_open(&pcb->user_files, file, pcb->num_opened_files++);
+  int result = user_dir_open(&pcb->user_directories, file, pcb->num_opened_files++);
+  if (result == -1) {
+    result = user_file_open(&pcb->user_files, file, pcb->num_opened_files);
+  }
+
   *eax = result;
 }
 
@@ -341,7 +345,9 @@ void syscall_tell_handler(uint32_t* eax, uint32_t* args) {
 void syscall_close_handler(uint32_t* eax UNUSED, uint32_t* args) {
   int fd = args[0];
 
-  user_file_close(&thread_current()->pcb->user_files, fd);
+  struct process* pcb = &thread_current()->pcb;
+  user_dir_close(&pcb->user_directories, fd);
+  user_file_close(&pcb->user_files, fd);
 }
 
 void syscall_practice_handler(uint32_t* eax, uint32_t* args) { *eax = args[0] + 1; }
