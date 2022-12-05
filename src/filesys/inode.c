@@ -10,7 +10,7 @@
 #include "threads/synch.h"
 
 /* Number of direct pointers in an inode. */
-#define NUM_DIRECT_POINTERS 124
+#define NUM_DIRECT_POINTERS 123
 
 /* Number of sector pointers that can be stored in a block. */
 #define POINTERS_PER_BLOCK 128
@@ -36,7 +36,6 @@ struct inode_disk {
   block_sector_t indirect;                    /* Indirect pointer. */
   block_sector_t doubly_indirect;             /* Doubly indirect pointer. */
   off_t length;                               /* File size in bytes. */
-  uint8_t unused[3];                          /* Not used. */
   unsigned magic;                             /* Magic number. */
 };
 
