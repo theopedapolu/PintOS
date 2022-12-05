@@ -57,7 +57,6 @@ void cache_init(void) {
    to false on a blind write). */
 static struct cache_entry* cache_get_entry(block_sector_t sector, bool read_on_miss) {
   struct cache_entry* entry = NULL;
-  bool hit;
   lock_acquire(&cache_lock);
 
   for (int i = 0; i < CACHE_SIZE; i++) {

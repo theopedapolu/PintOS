@@ -357,7 +357,7 @@ void syscall_tell_handler(uint32_t* eax, uint32_t* args) {
 void syscall_close_handler(uint32_t* eax UNUSED, uint32_t* args) {
   int fd = args[0];
 
-  struct process* pcb = &thread_current()->pcb;
+  struct process* pcb = thread_current()->pcb;
   user_dir_close(&pcb->user_directories, fd);
   user_file_close(&pcb->user_files, fd);
 }
@@ -439,8 +439,8 @@ void syscall_mkdir_handler(uint32_t* eax, uint32_t* args) {
   struct process* pcb = thread_current()->pcb;
   struct dir* parent_dir = pcb->working_dir;
   if (i > 0) {
-    char* parent_dir_string[i + 1];
-    strncpy(parent_dir_string, new_dir_string, i);
+    char parent_dir_string[i + 1];
+    strlcpy(parent_dir_string, new_dir_string, i);
     parent_dir_string[i] = '\0';
 
     parent_dir = dir_exists(parent_dir_string);
@@ -450,9 +450,8 @@ void syscall_mkdir_handler(uint32_t* eax, uint32_t* args) {
     }
   }
 
-  block_sector_t* sector = NULL;
-  free_map_allocate(sizeof(char*), sector);
-  if (!dir_create(sector, 1)) {
+  block_sector_t sector = 0;
+  if (!free_map_allocate(sizeof(char*), &sector) || !dir_create(sector, 1)) {
     dir_close(parent_dir);
     *eax = false;
     return;
