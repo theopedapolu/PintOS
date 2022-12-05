@@ -122,7 +122,7 @@ static void start_process(void* args_) {
     new_pcb->pagedir = NULL;
     new_pcb->num_opened_files = 2; // Skip stdin and stdout
     list_init(&(new_pcb->user_files));
-    new_pcb->working_dir = args->parent_process->working_dir;
+    new_pcb->working_dir = dir_reopen(args->parent_process->working_dir);
     list_init(&(new_pcb->user_directories));
     t->pcb = new_pcb;
 
@@ -180,6 +180,7 @@ static void start_process(void* args_) {
 
     // Destroy the user file and director lists and close all associated files/directories
     user_file_list_destroy(&pcb_to_free->user_files);
+    dir_close(pcb_to_free->working_dir);
     user_dir_list_destroy(&pcb_to_free->user_directories);
 
     free(pcb_to_free);
@@ -309,6 +310,7 @@ void process_exit(int status) {
 
   // Destroy the user file and directory lists and close all associated files/directories.
   user_file_list_destroy(&pcb_to_free->user_files);
+  dir_close(pcb_to_free->working_dir);
   user_dir_list_destroy(&pcb_to_free->user_directories);
 
   free(pcb_to_free);
