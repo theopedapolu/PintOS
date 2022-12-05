@@ -9,6 +9,12 @@ struct user_file {
   struct list_elem elem;
 };
 
+struct user_dir {
+  int fd;
+  struct dir* directory;
+  struct list_elem elem;
+};
+
 typedef struct list user_file_list;
 
 int user_file_open(user_file_list* list, const char* file, int fd);
