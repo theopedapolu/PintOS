@@ -5,6 +5,8 @@
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
 #include "threads/malloc.h"
+#include "threads/thread.h"
+#include "userprog/process.h"
 
 /* A directory. */
 struct dir {
@@ -65,6 +67,39 @@ struct inode* dir_get_inode(struct dir* dir) {
   return dir->inode;
 }
 
+/* Checks if a directory exists at the path NAME and
+   returns the directory if it exists, or NULL otherwise.
+   If the path is absolute (begins with a slash), then it
+   calls dir_lookup from the root directory. Otherwise, it
+   uses the process' working directory. */
+struct dir* dir_exists(char* name) {
+  char *token, *save_ptr;
+
+  struct dir* current_dir;
+  if (name[0] == '/') {
+    current_dir = dir_open_root();
+    name = name + sizeof(char);
+  } else {
+    current_dir = thread_current()->pcb->working_dir;
+  }
+
+  /* Loops through each token using the builtin strtok_r function and checks. */
+  for (token = strtok_r((char*)name, "/", &save_ptr); token != NULL;
+       token = strtok_r(NULL, "/", &save_ptr)) {
+    struct inode* inode = NULL;
+
+    if (!dir_lookup(current_dir, token, &inode))
+      return NULL;
+
+    dir_close(current_dir);
+    current_dir = dir_open(inode);
+    if (current_dir == NULL)
+      return NULL;
+  }
+
+  return current_dir;
+}
+
 /* Searches DIR for a file with the given NAME.
    If successful, returns true, sets *EP to the directory entry
    if EP is non-null, and sets *OFSP to the byte offset of the
@@ -87,13 +122,6 @@ static bool lookup(const struct dir* dir, const char* name, struct dir_entry* ep
     }
   return false;
 }
-
-/* Checks if a directory exists at the path NAME and
-   returns the directory if it exists, or NULL otherwise.
-   If the path is absolute (begins with a slash), then it
-   calls dir_lookup from the root directory. Otherwise, it
-   uses the process' working directory. */
-struct dir* dir_exists(char* name) {}
 
 /* Searches DIR for a file with the given NAME
    and returns true if one exists, false otherwise.
