@@ -308,7 +308,7 @@ void syscall_write_handler(uint32_t* eax, uint32_t* args) {
     return;
   }
 
-  void* buffer_ptr = buffer;
+  void* buffer_ptr = (void*)buffer;
   if (fd == STDOUT_FILENO) {
     *eax = length;
     while (length >= STDOUT_WRITE_CHUNK_SIZE) {
