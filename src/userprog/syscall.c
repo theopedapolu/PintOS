@@ -215,6 +215,18 @@ void syscall_remove_handler(uint32_t* eax, uint32_t* args) {
   char file[file_len + 1];
   strlcpy(file, file_u, file_len + 1);
 
+  struct dir* dir_to_remove = dir_exists(file);
+  if (dir_to_remove != NULL) {
+    char tmp_buf[15];
+    if (dir_readdir(dir_to_remove, tmp_buf)) {
+      *eax = false;
+      dir_close(dir_to_remove);
+      return;
+    }
+
+    dir_close(dir_to_remove);
+  }
+
   bool result = filesys_remove(file);
   *eax = result;
 }
