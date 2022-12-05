@@ -72,7 +72,7 @@ void user_file_list_destroy(user_file_list* list) {
    This creates a new entry in the list and assigns it a
    file descriptor. */
 int user_dir_open(user_dir_list* list, const char* dir, int fd) {
-  struct dir* d = dir_exists(dir);
+  struct dir* d = dir_exists((char*)dir);
   if (d == NULL)
     return -1;
 
