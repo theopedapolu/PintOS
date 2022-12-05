@@ -36,6 +36,7 @@ struct inode_disk {
   block_sector_t indirect;                    /* Indirect pointer. */
   block_sector_t doubly_indirect;             /* Doubly indirect pointer. */
   off_t length;                               /* File size in bytes. */
+  uint8_t unused[3];                          /* Not used. */
   unsigned magic;                             /* Magic number. */
 };
 
