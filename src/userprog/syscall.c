@@ -7,8 +7,11 @@
 #include "devices/input.h"
 #include "devices/shutdown.h"
 #include "filesys/cache.h"
+#include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
+#include "filesys/free-map.h"
+#include "filesys/inode.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
@@ -372,15 +375,123 @@ void syscall_nmap_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
 void syscall_munmap_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
 
-void syscall_chdir_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
+void syscall_chdir_handler(uint32_t* eax, uint32_t* args) {
+  const char* dir_u = (const char*)args[0];
 
-void syscall_mkdir_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
+  if (!is_valid_string(dir_u)) {
+    process_exit(-1);
+    return;
+  }
 
-void syscall_readdir_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
+  size_t dir_len = strlen(dir_u);
+  char new_dir_string[dir_len + 1];
+  strlcpy(new_dir_string, dir_u, dir_len + 1);
 
-void syscall_isdir_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
+  struct dir* new_dir = dir_exists(new_dir_string);
+  if (new_dir == NULL) {
+    *eax = false;
+  } else {
+    struct process* pcb = thread_current()->pcb;
 
-void syscall_inumber_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {}
+    dir_close(pcb->working_dir);
+    pcb->working_dir = new_dir;
+
+    *eax = true;
+  }
+}
+
+void syscall_mkdir_handler(uint32_t* eax, uint32_t* args) {
+  const char* dir_u = (const char*)args[0];
+
+  if (!is_valid_string(dir_u)) {
+    process_exit(-1);
+    return;
+  }
+
+  size_t dir_len = strlen(dir_u);
+  char new_dir_string[dir_len + 1];
+  strlcpy(new_dir_string, dir_u, dir_len + 1);
+
+  int i;
+  for (i = dir_len; i >= 0; i--) {
+    if (new_dir_string[i] == '/')
+      break;
+  }
+
+  struct process* pcb = thread_current()->pcb;
+  struct dir* parent_dir = pcb->working_dir;
+  if (i > 0) {
+    char* parent_dir_string[i + 1];
+    strncpy(parent_dir_string, new_dir_string, i);
+    parent_dir_string[i] = '\0';
+
+    parent_dir = dir_exists(parent_dir_string);
+    if (parent_dir == NULL) {
+      *eax = false;
+      return;
+    }
+  }
+
+  block_sector_t* sector = NULL;
+  free_map_allocate(sizeof(char*), sector);
+  if (!dir_create(sector, 1)) {
+    dir_close(parent_dir);
+    *eax = false;
+    return;
+  }
+
+  *eax = dir_add(parent_dir, &new_dir_string[i + 1], sector);
+  dir_close(parent_dir);
+}
+
+void syscall_readdir_handler(uint32_t* eax, uint32_t* args) {
+  int fd = args[0];
+  const void* buffer = (const void*)args[1];
+
+  if (!is_valid_user_memory(buffer, 15)) {
+    process_exit(-1);
+    return;
+  }
+
+  char* name = (char*)buffer;
+
+  struct process* pcb = thread_current()->pcb;
+  struct user_dir* ud = user_dir_get(&pcb->user_directories, fd);
+
+  if (ud == NULL) {
+    *eax = false;
+    return;
+  }
+
+  *eax = dir_readdir(ud->directory, name);
+}
+
+void syscall_isdir_handler(uint32_t* eax, uint32_t* args) {
+  int fd = args[0];
+
+  struct process* pcb = thread_current()->pcb;
+  *eax = user_dir_get(&pcb->user_directories, fd) != NULL;
+}
+
+void syscall_inumber_handler(uint32_t* eax, uint32_t* args) {
+  int fd = args[0];
+
+  struct process* pcb = thread_current()->pcb;
+  struct user_dir* ud = user_dir_get(&pcb->user_directories, fd);
+
+  if (ud == NULL) {
+    *eax = false;
+    return;
+  }
+
+  struct inode* ud_inode = dir_get_inode(ud->directory);
+  if (ud_inode == NULL) {
+    *eax = false;
+    return;
+  }
+
+  *eax = inode_get_inumber(ud_inode);
+}
 
 void syscall_buffer_cache_reset_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {
   cache_reset();
