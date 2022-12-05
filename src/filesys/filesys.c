@@ -7,6 +7,8 @@
 #include "filesys/inode.h"
 #include "filesys/directory.h"
 #include "filesys/cache.h"
+#include "threads/thread.h"
+#include "userprog/process.h"
 
 /* Partition that contains the file system. */
 struct block* fs_device;
@@ -43,7 +45,7 @@ void filesys_done(void) {
    or if internal memory allocation fails. */
 bool filesys_create(const char* name, off_t initial_size) {
   block_sector_t inode_sector = 0;
-  struct dir* dir = dir_open_root();
+  struct dir* dir = thread_current()->pcb->working_dir;
   bool success =
       (dir != NULL && free_map_allocate(1, &inode_sector) &&
        inode_create(inode_sector, initial_size, false) && dir_add(dir, name, inode_sector));
@@ -60,7 +62,7 @@ bool filesys_create(const char* name, off_t initial_size) {
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
 struct file* filesys_open(const char* name) {
-  struct dir* dir = dir_open_root();
+  struct dir* dir = thread_current()->pcb->working_dir;
   struct inode* inode = NULL;
 
   if (dir != NULL)
@@ -75,7 +77,7 @@ struct file* filesys_open(const char* name) {
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
 bool filesys_remove(const char* name) {
-  struct dir* dir = dir_open_root();
+  struct dir* dir = thread_current()->pcb->working_dir;
   bool success = dir != NULL && dir_remove(dir, name);
   dir_close(dir);
 
