@@ -88,6 +88,13 @@ static bool lookup(const struct dir* dir, const char* name, struct dir_entry* ep
   return false;
 }
 
+/* Checks if a directory exists at the path NAME and
+   returns the directory if it exists, or NULL otherwise.
+   If the path is absolute (begins with a slash), then it
+   calls dir_lookup from the root directory. Otherwise, it
+   uses the process' working directory. */
+struct dir* dir_exists(char* name) {}
+
 /* Searches DIR for a file with the given NAME
    and returns true if one exists, false otherwise.
    On success, sets *INODE to an inode for the file, otherwise to
