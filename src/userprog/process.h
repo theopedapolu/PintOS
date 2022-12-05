@@ -51,6 +51,8 @@ struct process {
   struct list child_exit_statuses; /* List of children's exit statuses */
   user_file_list user_files;       /* List of open files */
   int num_opened_files;            /* Number of files previously opened */
+  struct dir* working_dir;         /* Current working directory for process */
+  struct list user_directories;    /* List of user_dir's */
 };
 
 void userprog_init(void);
