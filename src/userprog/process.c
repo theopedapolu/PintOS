@@ -122,6 +122,8 @@ static void start_process(void* args_) {
     new_pcb->pagedir = NULL;
     new_pcb->num_opened_files = 2; // Skip stdin and stdout
     list_init(&(new_pcb->user_files));
+    new_pcb->working_dir = args->parent_process->working_dir;
+    list_init(&(new_pcb->user_directories));
     t->pcb = new_pcb;
 
     // Continue initializing the PCB as normal
@@ -176,8 +178,9 @@ static void start_process(void* args_) {
     struct process* pcb_to_free = t->pcb;
     t->pcb = NULL;
 
-    // Destroy the user file list and close all associated files
+    // Destroy the user file and director lists and close all associated files/directories
     user_file_list_destroy(&pcb_to_free->user_files);
+    user_dir_list_destroy(&pcb_to_free->user_directories);
 
     free(pcb_to_free);
   }
@@ -304,8 +307,9 @@ void process_exit(int status) {
   struct process* pcb_to_free = cur->pcb;
   cur->pcb = NULL;
 
-  // Destroy the user file list and close all associated files
+  // Destroy the user file and directory lists and close all associated files/directories.
   user_file_list_destroy(&pcb_to_free->user_files);
+  user_dir_list_destroy(&pcb_to_free->user_directories);
 
   free(pcb_to_free);
 
