@@ -24,7 +24,7 @@ struct dir_entry {
 /* Creates a directory with space for ENTRY_CNT entries in the
    given SECTOR.  Returns true if successful, false on failure. */
 bool dir_create(block_sector_t sector, size_t entry_cnt) {
-  return inode_create(sector, entry_cnt * sizeof(struct dir_entry));
+  return inode_create(sector, entry_cnt * sizeof(struct dir_entry), true);
 }
 
 /* Opens and returns the directory for the given INODE, of which
@@ -73,6 +73,9 @@ struct inode* dir_get_inode(struct dir* dir) {
    calls dir_lookup from the root directory. Otherwise, it
    uses the process' working directory. */
 struct dir* dir_exists(char* name) {
+  if (name[0] == '\0')
+    return NULL;
+
   char *token, *save_ptr;
 
   struct dir* current_dir;
@@ -88,8 +91,10 @@ struct dir* dir_exists(char* name) {
        token = strtok_r(NULL, "/", &save_ptr)) {
     struct inode* inode = NULL;
 
-    if (!dir_lookup(current_dir, token, &inode))
+    if (!dir_lookup(current_dir, token, &inode) || !inode_is_dir(inode)) {
+      dir_close(current_dir);
       return NULL;
+    }
 
     dir_close(current_dir);
     current_dir = dir_open(inode);
