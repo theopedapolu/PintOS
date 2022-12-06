@@ -10,7 +10,7 @@
 #include "threads/synch.h"
 
 /* Number of direct pointers in an inode. */
-#define NUM_DIRECT_POINTERS 123
+#define NUM_DIRECT_POINTERS 124
 
 /* Number of sector pointers that can be stored in a block. */
 #define POINTERS_PER_BLOCK 128
@@ -31,7 +31,6 @@ static const off_t DOUBLY_INDIRECT_CAPACITY =
 /* On-disk inode.
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
 struct inode_disk {
-  bool is_dir;                                /* True if this inode represents a directory. */
   block_sector_t direct[NUM_DIRECT_POINTERS]; /* Direct pointers. */
   block_sector_t indirect;                    /* Indirect pointer. */
   block_sector_t doubly_indirect;             /* Doubly indirect pointer. */
@@ -262,7 +261,7 @@ void inode_init(void) {
    device. Creates a directory if IS_DIR is true.
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
-bool inode_create(block_sector_t sector, off_t length, bool is_dir) {
+bool inode_create(block_sector_t sector, off_t length) {
   ASSERT(length >= 0);
 
   struct inode_disk* disk_inode = cache_get_buffer(sector, false);
@@ -271,7 +270,6 @@ bool inode_create(block_sector_t sector, off_t length, bool is_dir) {
      one sector in size, and you should fix that. */
   ASSERT(sizeof *disk_inode == BLOCK_SECTOR_SIZE);
 
-  disk_inode->is_dir = is_dir;
   disk_inode->length = length;
   disk_inode->magic = INODE_MAGIC;
   for (int i = 0; i < NUM_DIRECT_POINTERS; i++) {
