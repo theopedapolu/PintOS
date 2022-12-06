@@ -47,7 +47,7 @@ bool filesys_create(const char* name, off_t initial_size) {
   block_sector_t inode_sector = 0;
 
   struct dir* dir;
-  char* file = dir_split(name, &dir);
+  char* file = dir_split((char*)name, &dir);
   if (dir == NULL)
     return false;
 
@@ -68,7 +68,7 @@ bool filesys_create(const char* name, off_t initial_size) {
    or if an internal memory allocation fails. */
 struct file* filesys_open(const char* name) {
   struct dir* dir;
-  char* file = dir_split(name, &dir);
+  char* file = dir_split((char*)name, &dir);
   if (dir == NULL)
     return NULL;
 
@@ -88,16 +88,9 @@ struct file* filesys_open(const char* name) {
    or if an internal memory allocation fails. */
 bool filesys_remove(const char* name) {
   struct dir* dir;
-  char* file = dir_split(name, &dir);
+  char* file = dir_split((char*)name, &dir);
   if (dir == NULL)
     return false;
-
-  struct inode* inode = NULL;
-  dir_lookup(dir, file, &inode);
-  if (inode_is_dir(inode)) {
-    dir_close(dir);
-    return false;
-  }
 
   bool success = dir != NULL && dir_remove(dir, file);
   dir_close(dir);
