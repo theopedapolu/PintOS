@@ -246,16 +246,9 @@ void syscall_open_handler(uint32_t* eax, uint32_t* args) {
 
   struct process* pcb = thread_current()->pcb;
 
-  struct dir* parent_dir;
-  char* file = dir_split(filepath, &parent_dir);
-  if (parent_dir == NULL) {
-    *eax = false;
-    return;
-  }
-
-  int result = user_dir_open(&pcb->user_directories, file, pcb->num_opened_files++);
+  int result = user_dir_open(&pcb->user_directories, filepath, pcb->num_opened_files++);
   if (result == -1) {
-    result = user_file_open(&pcb->user_files, file, pcb->num_opened_files);
+    result = user_file_open(&pcb->user_files, filepath, pcb->num_opened_files);
   }
 
   *eax = result;
