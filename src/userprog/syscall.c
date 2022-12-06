@@ -438,10 +438,10 @@ void syscall_mkdir_handler(uint32_t* eax, uint32_t* args) {
   }
 
   struct process* pcb = thread_current()->pcb;
-  struct dir* parent_dir = pcb->working_dir;
+  struct dir* parent_dir;
   if (i > 0) {
     char parent_dir_string[i + 1];
-    strlcpy(parent_dir_string, new_dir_string, i);
+    strlcpy(parent_dir_string, new_dir_string, i + 1);
     parent_dir_string[i] = '\0';
 
     parent_dir = dir_exists(parent_dir_string);
@@ -449,6 +449,8 @@ void syscall_mkdir_handler(uint32_t* eax, uint32_t* args) {
       *eax = false;
       return;
     }
+  } else {
+    parent_dir = new_dir_string[0] == '/' ? dir_open_root() : dir_reopen(pcb->working_dir);
   }
 
   block_sector_t sector = 0;
