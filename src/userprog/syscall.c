@@ -240,11 +240,18 @@ void syscall_open_handler(uint32_t* eax, uint32_t* args) {
     return;
   }
 
-  size_t file_len = strlen(file_u);
-  char file[file_len + 1];
-  strlcpy(file, file_u, file_len + 1);
+  size_t filepath_len = strlen(file_u);
+  char filepath[filepath_len + 1];
+  strlcpy(filepath, file_u, filepath_len + 1);
 
   struct process* pcb = thread_current()->pcb;
+
+  struct dir* parent_dir;
+  char* file = dir_split(filepath, &parent_dir);
+  if (parent_dir == NULL) {
+    *eax = false;
+    return;
+  }
 
   int result = user_dir_open(&pcb->user_directories, file, pcb->num_opened_files++);
   if (result == -1) {
@@ -431,26 +438,11 @@ void syscall_mkdir_handler(uint32_t* eax, uint32_t* args) {
   char new_dir_string[dir_len + 1];
   strlcpy(new_dir_string, dir_u, dir_len + 1);
 
-  int i;
-  for (i = dir_len; i >= 0; i--) {
-    if (new_dir_string[i] == '/')
-      break;
-  }
-
-  struct process* pcb = thread_current()->pcb;
   struct dir* parent_dir;
-  if (i > 0) {
-    char parent_dir_string[i + 1];
-    strlcpy(parent_dir_string, new_dir_string, i + 1);
-    parent_dir_string[i] = '\0';
-
-    parent_dir = dir_exists(parent_dir_string);
-    if (parent_dir == NULL) {
-      *eax = false;
-      return;
-    }
-  } else {
-    parent_dir = new_dir_string[0] == '/' ? dir_open_root() : dir_reopen(pcb->working_dir);
+  char* file = dir_split(new_dir_string, &parent_dir);
+  if (parent_dir == NULL) {
+    *eax = false;
+    return;
   }
 
   block_sector_t sector = 0;
@@ -460,7 +452,7 @@ void syscall_mkdir_handler(uint32_t* eax, uint32_t* args) {
     return;
   }
 
-  *eax = dir_add(parent_dir, &new_dir_string[i + 1], sector);
+  *eax = dir_add(parent_dir, file, sector);
   dir_close(parent_dir);
 }
 

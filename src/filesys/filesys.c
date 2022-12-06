@@ -46,15 +46,14 @@ void filesys_done(void) {
 bool filesys_create(const char* name, off_t initial_size) {
   block_sector_t inode_sector = 0;
 
-  struct dir* dir = thread_current()->pcb->working_dir;
+  struct dir* dir;
+  char* file = dir_split(name, &dir);
   if (dir == NULL)
-    dir = dir_open_root();
-  else
-    dir = dir_reopen(dir);
+    return false;
 
   bool success =
       (dir != NULL && free_map_allocate(1, &inode_sector) &&
-       inode_create(inode_sector, initial_size, false) && dir_add(dir, name, inode_sector));
+       inode_create(inode_sector, initial_size, false) && dir_add(dir, file, inode_sector));
   if (!success && inode_sector != 0)
     free_map_release(inode_sector, 1);
   dir_close(dir);
@@ -68,17 +67,17 @@ bool filesys_create(const char* name, off_t initial_size) {
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
 struct file* filesys_open(const char* name) {
-  struct dir* dir = thread_current()->pcb->working_dir;
-  if (dir == NULL || name[0] == '/')
-    dir = dir_open_root();
-  else
-    dir = dir_reopen(dir);
+  struct dir* dir;
+  char* file = dir_split(name, &dir);
+  if (dir == NULL)
+    return NULL;
 
   struct inode* inode = NULL;
-
-  if (dir != NULL)
-    dir_lookup(dir, name, &inode);
+  dir_lookup(dir, file, &inode);
   dir_close(dir);
+
+  if (inode_is_dir(inode))
+    return NULL;
 
   return file_open(inode);
 }
@@ -88,13 +87,19 @@ struct file* filesys_open(const char* name) {
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
 bool filesys_remove(const char* name) {
-  struct dir* dir = thread_current()->pcb->working_dir;
+  struct dir* dir;
+  char* file = dir_split(name, &dir);
   if (dir == NULL)
-    dir = dir_open_root();
-  else
-    dir = dir_reopen(dir);
+    return false;
 
-  bool success = dir != NULL && dir_remove(dir, name);
+  struct inode* inode = NULL;
+  dir_lookup(dir, file, &inode);
+  if (inode_is_dir(inode)) {
+    dir_close(dir);
+    return false;
+  }
+
+  bool success = dir != NULL && dir_remove(dir, file);
   dir_close(dir);
 
   return success;
