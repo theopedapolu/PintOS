@@ -86,8 +86,11 @@ struct dir* dir_exists(char* name) {
     current_dir = dir_reopen(thread_current()->pcb->working_dir);
   }
 
+  char tmp[strlen(name)];
+  strlcpy(tmp, name, strlen(name));
+
   /* Loops through each token using the builtin strtok_r function and checks. */
-  for (token = strtok_r((char*)name, "/", &save_ptr); token != NULL;
+  for (token = strtok_r((char*)tmp, "/", &save_ptr); token != NULL;
        token = strtok_r(NULL, "/", &save_ptr)) {
     struct inode* inode = NULL;
 
