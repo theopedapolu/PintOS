@@ -452,7 +452,7 @@ void syscall_mkdir_handler(uint32_t* eax, uint32_t* args) {
   }
 
   block_sector_t sector = 0;
-  if (!free_map_allocate(sizeof(char*), &sector) || !dir_create(sector, 1)) {
+  if (!free_map_allocate(1, &sector) || !dir_create(sector, 16)) {
     dir_close(parent_dir);
     *eax = false;
     return;
