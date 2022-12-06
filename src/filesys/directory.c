@@ -97,7 +97,7 @@ char* dir_split(char* name, struct dir** parent) {
       return NULL;
     }
   } else {
-    *parent = i == 0 ? dir_open_root() : dir_reopen(pcb->working_dir);
+    *parent = pcb->working_dir == NULL || i == 0 ? dir_open_root() : dir_reopen(pcb->working_dir);
   }
 
   return &name[i + 1];
