@@ -329,7 +329,7 @@ void syscall_write_handler(uint32_t* eax, uint32_t* args) {
 
   struct user_file* uf = user_file_get(&thread_current()->pcb->user_files, fd);
   if (uf == NULL) {
-    *eax = 0;
+    *eax = -1;
     return;
   }
 
