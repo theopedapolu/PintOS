@@ -225,6 +225,37 @@ void syscall_remove_handler(uint32_t* eax, uint32_t* args) {
       return;
     }
 
+    struct process* pcb = thread_current()->pcb;
+    struct dir* working_dir = pcb->working_dir;
+    if (working_dir == NULL)
+      working_dir = dir_open_root();
+    else
+      working_dir = dir_reopen(working_dir);
+
+    struct inode* working_dir_inode = dir_get_inode(working_dir);
+    struct inode* dir_to_remove_inode = dir_get_inode(dir_to_remove);
+
+    dir_close(working_dir);
+
+    if (inode_get_inumber(working_dir_inode) == inode_get_inumber(dir_to_remove_inode)) {
+      *eax = false;
+      dir_close(dir_to_remove);
+      return;
+    }
+
+    struct list_elem* e;
+    for (e = list_begin(&pcb->user_directories); e != list_end(&pcb->user_directories);
+         e = list_next(e)) {
+      struct user_dir* d = list_entry(e, struct user_dir, elem);
+
+      if (inode_get_inumber(dir_get_inode(d->directory)) ==
+          inode_get_inumber(dir_to_remove_inode)) {
+        *eax = false;
+        dir_close(dir_to_remove);
+        return;
+      }
+    }
+
     dir_close(dir_to_remove);
   }
 
