@@ -122,7 +122,10 @@ static void start_process(void* args_) {
     new_pcb->pagedir = NULL;
     new_pcb->num_opened_files = 2; // Skip stdin and stdout
     list_init(&(new_pcb->user_files));
-    new_pcb->working_dir = dir_reopen(args->parent_process->working_dir);
+    if (args->parent_process->working_dir)
+      new_pcb->working_dir = dir_reopen(args->parent_process->working_dir);
+    else
+      new_pcb->working_dir = dir_open_root();
     list_init(&(new_pcb->user_directories));
     t->pcb = new_pcb;
 
