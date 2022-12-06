@@ -67,6 +67,42 @@ struct inode* dir_get_inode(struct dir* dir) {
   return dir->inode;
 }
 
+/* Takes in a path NAME to a file and a pointer 
+   PARENT to a directory pointer and returns the 
+   name of the file corresponding to the path and 
+   opens its parent in PARENT. The pointer to the
+   name of the file is an offset to NAME. Returns
+   NULL if the parent directory doesn't exist.
+
+   For example, for name = "a/b/c/d", it opens the
+   directory /{working_dir}/a/b/c to PARENT and
+   returns a pointer to the string "d" as NAME+6. */
+char* dir_split(char* name, struct dir** parent) {
+  int i;
+  for (i = strlen(name); i >= 0; i--) {
+    if (name[i] == '/')
+      break;
+  }
+  if (i == 0 && name[i] != '/')
+    i = -1;
+
+  struct process* pcb = thread_current()->pcb;
+  if (i > 0) {
+    char parent_dir_string[i + 1];
+    strlcpy(parent_dir_string, name, i + 1);
+    parent_dir_string[i] = '\0';
+
+    *parent = dir_exists(parent_dir_string);
+    if (*parent == NULL) {
+      return NULL;
+    }
+  } else {
+    *parent = i == 0 ? dir_open_root() : dir_reopen(pcb->working_dir);
+  }
+
+  return &name[i + 1];
+}
+
 /* Checks if a directory exists at the path NAME and
    returns the directory if it exists, or NULL otherwise.
    If the path is absolute (begins with a slash), then it
