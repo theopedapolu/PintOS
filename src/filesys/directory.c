@@ -80,7 +80,7 @@ struct dir* dir_exists(char* name) {
     current_dir = dir_open_root();
     name = name + sizeof(char);
   } else {
-    current_dir = thread_current()->pcb->working_dir;
+    current_dir = dir_reopen(thread_current()->pcb->working_dir);
   }
 
   /* Loops through each token using the builtin strtok_r function and checks. */

@@ -51,6 +51,8 @@ bool filesys_create(const char* name, off_t initial_size) {
   struct dir* dir = thread_current()->pcb->working_dir;
   if (dir == NULL)
     dir = dir_open_root();
+  else
+    dir = dir_reopen(dir);
 
   bool success = (dir != NULL && free_map_allocate(1, &inode_sector) &&
                   inode_create(inode_sector, initial_size) && dir_add(dir, name, inode_sector));
@@ -70,6 +72,8 @@ struct file* filesys_open(const char* name) {
   struct dir* dir = thread_current()->pcb->working_dir;
   if (dir == NULL)
     dir = dir_open_root();
+  else
+    dir = dir_reopen(dir);
 
   struct inode* inode = NULL;
 
@@ -88,6 +92,8 @@ bool filesys_remove(const char* name) {
   struct dir* dir = thread_current()->pcb->working_dir;
   if (dir == NULL)
     dir = dir_open_root();
+  else
+    dir = dir_reopen(dir);
 
   bool success = dir != NULL && dir_remove(dir, name);
   dir_close(dir);
