@@ -53,8 +53,6 @@ bool dir_create(block_sector_t sector, size_t entry_cnt) {
 
   block_sector_t parent_sector = inode_get_inumber(parent_inode);
   dir_close(parent);
-  if (parent_sector == NULL)
-    return false;
 
   if (!dir_add(dir, "..", parent_sector))
     return false;
