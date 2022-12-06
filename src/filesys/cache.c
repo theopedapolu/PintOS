@@ -37,8 +37,10 @@ static struct lock cache_lock;
 /* Initializes the buffer cache module. */
 void cache_init(void) {
   for (int i = 0; i < CACHE_SIZE; i++) {
-    buffer_cache[i].sector =
-        -1; // -1 instead of 0 to prevent incorrect cache hits on FREE_MAP_SECTOR
+    /* -1 instead of 0 to prevent incorrect 
+       cache hits on FREE_MAP_SECTOR */
+    buffer_cache[i].sector = -1;
+
     buffer_cache[i].valid = false;
     buffer_cache[i].dirty = false;
     buffer_cache[i].last_accessed = 0;
