@@ -3,6 +3,7 @@
 #include <string.h>
 #include <list.h>
 #include "filesys/filesys.h"
+#include "filesys/free-map.h"
 #include "filesys/inode.h"
 #include "threads/malloc.h"
 #include "threads/thread.h"
@@ -24,7 +25,41 @@ struct dir_entry {
 /* Creates a directory with space for ENTRY_CNT entries in the
    given SECTOR.  Returns true if successful, false on failure. */
 bool dir_create(block_sector_t sector, size_t entry_cnt) {
-  return inode_create(sector, entry_cnt * sizeof(struct dir_entry), true);
+  if (!inode_create(sector, entry_cnt * sizeof(struct dir_entry), true))
+    return false;
+
+  struct inode* inode = inode_open(sector);
+  if (inode == NULL)
+    return false;
+
+  struct dir* dir = dir_open(inode);
+  if (dir == NULL)
+    return false;
+
+  if (!dir_add(dir, ".", sector))
+    return false;
+
+  struct dir* parent = thread_current()->pcb->working_dir;
+  if (parent == NULL)
+    parent = dir_open_root();
+  else
+    parent = dir_reopen(parent);
+
+  struct inode* parent_inode = dir_get_inode(parent);
+  if (parent_inode == NULL) {
+    dir_close(parent);
+    return false;
+  }
+
+  block_sector_t parent_sector = inode_get_inumber(parent_inode);
+  dir_close(parent);
+  if (parent_sector == NULL)
+    return false;
+
+  if (!dir_add(dir, "..", parent_sector))
+    return false;
+
+  return true;
 }
 
 /* Opens and returns the directory for the given INODE, of which
@@ -269,9 +304,12 @@ done:
 bool dir_readdir(struct dir* dir, char name[NAME_MAX + 1]) {
   struct dir_entry e;
 
+  char* dot = ".";
+  char* dotdot = "..";
+
   while (inode_read_at(dir->inode, &e, sizeof e, dir->pos) == sizeof e) {
     dir->pos += sizeof e;
-    if (e.in_use) {
+    if (e.in_use && strcmp(e.name, dot) != 0 && strcmp(e.name, dotdot) != 0) {
       strlcpy(name, e.name, NAME_MAX + 1);
       return true;
     }
