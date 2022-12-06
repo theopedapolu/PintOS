@@ -69,7 +69,7 @@ bool filesys_create(const char* name, off_t initial_size) {
    or if an internal memory allocation fails. */
 struct file* filesys_open(const char* name) {
   struct dir* dir = thread_current()->pcb->working_dir;
-  if (dir == NULL)
+  if (dir == NULL || name[0] == '/')
     dir = dir_open_root();
   else
     dir = dir_reopen(dir);
