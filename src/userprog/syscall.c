@@ -277,10 +277,12 @@ void syscall_open_handler(uint32_t* eax, uint32_t* args) {
 
   struct process* pcb = thread_current()->pcb;
 
-  int result = user_dir_open(&pcb->user_directories, filepath, pcb->num_opened_files++);
-  if (result == -1) {
+  int result = user_dir_open(&pcb->user_directories, filepath, pcb->num_opened_files);
+  if (result == -1)
     result = user_file_open(&pcb->user_files, filepath, pcb->num_opened_files);
-  }
+
+  if (result != -1)
+    pcb->num_opened_files++;
 
   *eax = result;
 }
