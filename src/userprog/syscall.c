@@ -516,19 +516,25 @@ void syscall_inumber_handler(uint32_t* eax, uint32_t* args) {
 
   struct process* pcb = thread_current()->pcb;
   struct user_dir* ud = user_dir_get(&pcb->user_directories, fd);
+  struct inode* u_inode;
+  if (ud != NULL) {
+    u_inode = dir_get_inode(ud->directory);
+  } else {
+    struct user_file* uf = user_file_get(&pcb->user_files, fd);
+    if (uf == NULL) {
+      *eax = -1;
+      return;
+    }
 
-  if (ud == NULL) {
-    *eax = false;
+    u_inode = file_get_inode(uf->file);
+  }
+
+  if (u_inode == NULL) {
+    *eax = -1;
     return;
   }
 
-  struct inode* ud_inode = dir_get_inode(ud->directory);
-  if (ud_inode == NULL) {
-    *eax = false;
-    return;
-  }
-
-  *eax = inode_get_inumber(ud_inode);
+  *eax = inode_get_inumber(u_inode);
 }
 
 void syscall_buffer_cache_reset_handler(uint32_t* eax UNUSED, uint32_t* args UNUSED) {
