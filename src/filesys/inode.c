@@ -10,7 +10,7 @@
 #include "threads/synch.h"
 
 /* Number of direct pointers in an inode. */
-#define NUM_DIRECT_POINTERS 124
+#define NUM_DIRECT_POINTERS 123
 
 /* Number of sector pointers that can be stored in a block. */
 #define POINTERS_PER_BLOCK 128
@@ -31,6 +31,7 @@ static const off_t DOUBLY_INDIRECT_CAPACITY =
 /* On-disk inode.
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
 struct inode_disk {
+  bool is_dir;                                /* True if this inode represents a directory. */
   block_sector_t direct[NUM_DIRECT_POINTERS]; /* Direct pointers. */
   block_sector_t indirect;                    /* Indirect pointer. */
   block_sector_t doubly_indirect;             /* Doubly indirect pointer. */
@@ -258,10 +259,10 @@ void inode_init(void) {
 
 /* Initializes an inode with LENGTH bytes of data and
    writes the new inode to sector SECTOR on the file system
-   device.
+   device. Creates a directory if IS_DIR is true.
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
-bool inode_create(block_sector_t sector, off_t length) {
+bool inode_create(block_sector_t sector, off_t length, bool is_dir) {
   ASSERT(length >= 0);
 
   struct inode_disk* disk_inode = cache_get_buffer(sector, false);
@@ -269,7 +270,7 @@ bool inode_create(block_sector_t sector, off_t length) {
   /* If this assertion fails, the inode structure is not exactly
      one sector in size, and you should fix that. */
   ASSERT(sizeof *disk_inode == BLOCK_SECTOR_SIZE);
-
+  disk_inode->is_dir = is_dir;
   disk_inode->length = length;
   disk_inode->magic = INODE_MAGIC;
   for (int i = 0; i < NUM_DIRECT_POINTERS; i++) {
@@ -385,7 +386,7 @@ off_t inode_read_at(struct inode* inode, void* buffer_, off_t size, off_t offset
   while (size > 0) {
     /* Disk sector to read, starting byte offset within sector. */
     block_sector_t sector_idx = byte_to_sector(inode, offset);
-    if (sector_idx == -1) {
+    if (sector_idx == (block_sector_t)-1) {
       break;
     }
     int sector_ofs = offset % BLOCK_SECTOR_SIZE;
@@ -452,7 +453,7 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
   while (size > 0) {
     /* Sector to write, starting byte offset within sector. */
     block_sector_t sector_idx = byte_to_sector(inode, offset);
-    if (sector_idx == -1) {
+    if (sector_idx == (block_sector_t)-1) {
       break;
     }
     int sector_ofs = offset % BLOCK_SECTOR_SIZE;
@@ -517,4 +518,11 @@ off_t inode_length(const struct inode* inode) {
   off_t length = data->length;
   cache_release_buffer(data, false, false);
   return length;
+}
+
+bool inode_is_dir(const struct inode* inode) {
+  struct inode_disk* data = cache_get_buffer(inode->sector, true);
+  bool is_dir = data->is_dir;
+  cache_release_buffer(data, false, false);
+  return is_dir;
 }

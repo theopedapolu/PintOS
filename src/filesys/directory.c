@@ -3,8 +3,11 @@
 #include <string.h>
 #include <list.h>
 #include "filesys/filesys.h"
+#include "filesys/free-map.h"
 #include "filesys/inode.h"
 #include "threads/malloc.h"
+#include "threads/thread.h"
+#include "userprog/process.h"
 
 /* A directory. */
 struct dir {
@@ -22,7 +25,39 @@ struct dir_entry {
 /* Creates a directory with space for ENTRY_CNT entries in the
    given SECTOR.  Returns true if successful, false on failure. */
 bool dir_create(block_sector_t sector, size_t entry_cnt) {
-  return inode_create(sector, entry_cnt * sizeof(struct dir_entry));
+  if (!inode_create(sector, entry_cnt * sizeof(struct dir_entry), true))
+    return false;
+
+  struct inode* inode = inode_open(sector);
+  if (inode == NULL)
+    return false;
+
+  struct dir* dir = dir_open(inode);
+  if (dir == NULL)
+    return false;
+
+  if (!dir_add(dir, ".", sector))
+    return false;
+
+  struct dir* parent = thread_current()->pcb->working_dir;
+  if (parent == NULL)
+    parent = dir_open_root();
+  else
+    parent = dir_reopen(parent);
+
+  struct inode* parent_inode = dir_get_inode(parent);
+  if (parent_inode == NULL) {
+    dir_close(parent);
+    return false;
+  }
+
+  block_sector_t parent_sector = inode_get_inumber(parent_inode);
+  dir_close(parent);
+
+  if (!dir_add(dir, "..", parent_sector))
+    return false;
+
+  return true;
 }
 
 /* Opens and returns the directory for the given INODE, of which
@@ -63,6 +98,89 @@ void dir_close(struct dir* dir) {
 /* Returns the inode encapsulated by DIR. */
 struct inode* dir_get_inode(struct dir* dir) {
   return dir->inode;
+}
+
+/* Takes in a path NAME to a file and a pointer 
+   PARENT to a directory pointer and returns the 
+   name of the file corresponding to the path and 
+   opens its parent in PARENT. The pointer to the
+   name of the file is an offset to NAME. Returns
+   NULL if the parent directory doesn't exist.
+
+   For example, for name = "a/b/c/d", it opens the
+   directory /{working_dir}/a/b/c to PARENT and
+   returns a pointer to the string "d" as NAME+6. */
+char* dir_split(char* name, struct dir** parent) {
+  int i;
+  for (i = strlen(name); i >= 0; i--) {
+    if (name[i] == '/')
+      break;
+  }
+  if (i == 0 && name[i] != '/')
+    i = -1;
+
+  struct process* pcb = thread_current()->pcb;
+  if (i > 0) {
+    char parent_dir_string[i + 1];
+    strlcpy(parent_dir_string, name, i + 1);
+    parent_dir_string[i] = '\0';
+
+    *parent = dir_exists(parent_dir_string);
+    if (*parent == NULL) {
+      return NULL;
+    }
+  } else {
+    *parent = pcb->working_dir == NULL || i == 0 ? dir_open_root() : dir_reopen(pcb->working_dir);
+  }
+
+  return &name[i + 1];
+}
+
+/* Checks if a directory exists at the path NAME and
+   returns the directory if it exists, or NULL otherwise.
+   If the path is absolute (begins with a slash), then it
+   calls dir_lookup from the root directory. Otherwise, it
+   uses the process' working directory. */
+struct dir* dir_exists(char* name) {
+  if (name[0] == '\0')
+    return NULL;
+
+  char *token, *save_ptr;
+
+  struct dir* current_dir;
+  if (name[0] == '/') {
+    current_dir = dir_open_root();
+    name = name + sizeof(char);
+  } else {
+    current_dir = dir_reopen(thread_current()->pcb->working_dir);
+  }
+
+  char tmp[strlen(name) + 1];
+  strlcpy(tmp, name, strlen(name) + 1);
+
+  /* Loops through each token using the builtin strtok_r function and checks. */
+  for (token = strtok_r((char*)tmp, "/", &save_ptr); token != NULL;
+       token = strtok_r(NULL, "/", &save_ptr)) {
+    struct inode* inode = NULL;
+
+    if (!dir_lookup(current_dir, token, &inode)) {
+      dir_close(current_dir);
+      return NULL;
+    }
+
+    if (!inode_is_dir(inode)) {
+      dir_close(current_dir);
+      inode_close(inode);
+      return NULL;
+    }
+
+    dir_close(current_dir);
+    current_dir = dir_open(inode);
+    if (current_dir == NULL)
+      return NULL;
+  }
+
+  return current_dir;
 }
 
 /* Searches DIR for a file with the given NAME.
@@ -190,9 +308,12 @@ done:
 bool dir_readdir(struct dir* dir, char name[NAME_MAX + 1]) {
   struct dir_entry e;
 
+  char* dot = ".";
+  char* dotdot = "..";
+
   while (inode_read_at(dir->inode, &e, sizeof e, dir->pos) == sizeof e) {
     dir->pos += sizeof e;
-    if (e.in_use) {
+    if (e.in_use && strcmp(e.name, dot) != 0 && strcmp(e.name, dotdot) != 0) {
       strlcpy(name, e.name, NAME_MAX + 1);
       return true;
     }

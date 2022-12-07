@@ -122,6 +122,11 @@ static void start_process(void* args_) {
     new_pcb->pagedir = NULL;
     new_pcb->num_opened_files = 2; // Skip stdin and stdout
     list_init(&(new_pcb->user_files));
+    if (args->parent_process->working_dir)
+      new_pcb->working_dir = dir_reopen(args->parent_process->working_dir);
+    else
+      new_pcb->working_dir = dir_open_root();
+    list_init(&(new_pcb->user_directories));
     t->pcb = new_pcb;
 
     // Continue initializing the PCB as normal
@@ -170,14 +175,16 @@ static void start_process(void* args_) {
 
   /* Handle failure with succesful PCB malloc. Must free the PCB */
   if (!success && pcb_success) {
+    // Destroy the user file and director lists and close all associated files/directories
+    user_file_list_destroy(&t->pcb->user_files);
+    dir_close(t->pcb->working_dir);
+    user_dir_list_destroy(&t->pcb->user_directories);
+
     // Avoid race where PCB is freed before t->pcb is set to NULL
     // If this happens, then an unfortuantely timed timer interrupt
     // can try to activate the pagedir, but it is now freed memory
     struct process* pcb_to_free = t->pcb;
     t->pcb = NULL;
-
-    // Destroy the user file list and close all associated files
-    user_file_list_destroy(&pcb_to_free->user_files);
 
     free(pcb_to_free);
   }
@@ -297,15 +304,17 @@ void process_exit(int status) {
   /* Close executable file, allowing write */
   file_close(cur->pcb->exec_file);
 
+  // Destroy the user file and directory lists and close all associated files/directories.
+  user_file_list_destroy(&cur->pcb->user_files);
+  dir_close(cur->pcb->working_dir);
+  user_dir_list_destroy(&cur->pcb->user_directories);
+
   /* Free the PCB of this process and kill this thread
      Avoid race where PCB is freed before t->pcb is set to NULL
      If this happens, then an unfortuantely timed timer interrupt
      can try to activate the pagedir, but it is now freed memory */
   struct process* pcb_to_free = cur->pcb;
   cur->pcb = NULL;
-
-  // Destroy the user file list and close all associated files
-  user_file_list_destroy(&pcb_to_free->user_files);
 
   free(pcb_to_free);
 
