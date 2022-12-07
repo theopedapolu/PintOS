@@ -163,8 +163,14 @@ struct dir* dir_exists(char* name) {
        token = strtok_r(NULL, "/", &save_ptr)) {
     struct inode* inode = NULL;
 
-    if (!dir_lookup(current_dir, token, &inode) || !inode_is_dir(inode)) {
+    if (!dir_lookup(current_dir, token, &inode)) {
       dir_close(current_dir);
+      return NULL;
+    }
+
+    if (!inode_is_dir(inode)) {
+      dir_close(current_dir);
+      inode_close(inode);
       return NULL;
     }
 
